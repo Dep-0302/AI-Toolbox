@@ -1,0 +1,38 @@
+{
+  "name": "ai-toolbox-workbench",
+  "version": "0.1.0",
+  "description": "Local, observe-only inventory for AI Skills, plugins, MCP servers, CLIs, and SDKs.",
+  "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Dep-0302/AI-Toolbox.git"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "test": "NODE_ENV=test vitest run",
+    "test:python": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py' -v",
+    "test:candidates": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. python3 -m unittest discover -s tests -p 'test_candidate_workbench.py' -v",
+    "check": "npm run test && npm run build && npm run test:python && npm run test:candidates",
+    "scan": "PYTHONDONTWRITEBYTECODE=1 python3 app.py scan",
+    "scan:collections": "PYTHONDONTWRITEBYTECODE=1 python3 app.py collections-scan",
+    "start": "PYTHONDONTWRITEBYTECODE=1 python3 app.py serve",
+    "workbench": "npm run build && npm run start"
+  },
+  "dependencies": {
+    "lucide-react": "https://registry.npmjs.org/lucide-react/-/lucide-react-0.577.0.tgz",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "6.0.3",
+    "jsdom": "29.1.1",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}

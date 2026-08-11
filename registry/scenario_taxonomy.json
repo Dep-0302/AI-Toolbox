@@ -1,0 +1,431 @@
+{
+  "version": 1,
+  "relation_definitions": {
+    "single": {
+      "label": "单项",
+      "scope": "group_state",
+      "definition": "当前只有一个对象，不建立对象间关系。"
+    },
+    "alternative": {
+      "label": "备选",
+      "scope": "object_relation",
+      "definition": "面向同一任务，任意一个都能独立完成，选择一个即可；同时存在不会出错，只是功能重叠。"
+    },
+    "conflict": {
+      "label": "冲突",
+      "scope": "object_relation",
+      "definition": "在同一范围同时启用或使用会造成触发碰撞、状态覆盖、结论矛盾或技术不兼容。"
+    },
+    "complementary": {
+      "label": "互补",
+      "scope": "object_relation",
+      "definition": "能力不同且不可互相替代，组合使用会增加明确价值。"
+    },
+    "dependency": {
+      "label": "依赖",
+      "scope": "object_relation",
+      "definition": "存在方向性，一个对象必须依赖另一个对象才能运行或完成。"
+    },
+    "duplicate": {
+      "label": "重复",
+      "scope": "object_relation",
+      "definition": "实际是同一资产的副本、版本或重复收录，不作为备选判断。"
+    },
+    "independent": {
+      "label": "独立",
+      "scope": "object_relation",
+      "definition": "同属一个场景，但彼此没有替代、冲突、互补或依赖关系。"
+    },
+    "mixed": {
+      "label": "混合关系",
+      "scope": "group_state",
+      "definition": "组内存在两种及以上已经确认的关系，必须逐对象查看。"
+    },
+    "unknown": {
+      "label": "关系未判定",
+      "scope": "group_state",
+      "definition": "当前只完成场景归组，没有足够证据判断对象间关系。"
+    }
+  },
+  "default": {
+    "description": "围绕这一用途查找并组合能力。",
+    "relation_kind": "unknown",
+    "relation_label": "关系未判定",
+    "relation_note": "当前只确认它们属于同一用途分组，具体替代或互补关系仍需逐项核对。",
+    "related_subcategories": []
+  },
+  "scenes": {
+    "Agent 协作与执行方法": {
+      "order": 10,
+      "description": "需要规划、分工、并行执行、校准或多视角复核复杂任务时。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "建议按“规划与分工 → 执行与并行 → 评估与复核”选择不同职责的 Skill。"
+    },
+    "AgentMemory 与长期记忆": {
+      "order": 20,
+      "description": "需要接入、配置、捕获、检索或治理 Agent 长期记忆时。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "建议链路是“接入与配置 → 自动捕获 → 检索、保存或删除”。"
+    },
+    "GitHub 与代码协作": {
+      "order": 30,
+      "description": "处理仓库、Issue、Pull Request、代码审查和分支收尾时。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "不同 Skill 覆盖认证、仓库管理、评审和提交追溯等协作环节。",
+      "related_subcategories": ["代码托管与持续集成"]
+    },
+    "GitNexus 代码图谱": {
+      "order": 40,
+      "description": "理解代码库、查询依赖、评估影响、调试、重构或安全分析时。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "通常先索引或探索，再进入影响分析、调试、重构或安全审查。"
+    },
+    "Hermes 生态": {
+      "order": 50,
+      "description": "使用或扩展 Hermes 的桌面、网关、消息、主题与插件能力时。",
+      "relation_kind": "mixed",
+      "relation_label": "混合关系",
+      "relation_note": "既有不同组件的配套能力，也有面向相近入口的备选方案。"
+    },
+    "Skill 发现、安装与治理": {
+      "order": 60,
+      "description": "需要发现、审查或安装第三方 Skill 时。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "建议顺序是“发现 → 安全审查 → 安装”，三者不是简单替代。"
+    },
+    "造技能的元技能": {
+      "order": 70,
+      "description": "需要创建、改写或规范化 Skill 时。",
+      "relation_kind": "alternative",
+      "relation_label": "备选",
+      "relation_note": "目标相近，但面向的宿主和产出规范不同，通常按目标宿主选一个主入口。"
+    },
+    "工具链与工作流设计": {
+      "order": 80,
+      "description": "需要把多个工具或步骤组织成可重复工作流时。",
+      "relation_kind": "unknown",
+      "relation_label": "关系未判定",
+      "relation_note": "当前只有用途归类，没有足够关系证据形成固定链路。"
+    },
+    "会话历史与交接": {
+      "order": 90,
+      "description": "回看近期工作、恢复上下文或把当前位置交给下一位执行者时。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "屏幕历史、会话回顾、会话检索和交接分别覆盖不同深度。"
+    },
+    "宿主连接与故障排查": {
+      "order": 100,
+      "description": "宿主连接、认证或运行状态异常，需要定位故障时。",
+      "relation_kind": "alternative",
+      "relation_label": "备选",
+      "relation_note": "当前能力目标高度相近，优先按故障入口和覆盖范围选择。",
+      "related_subcategories": ["调试、诊断与重构"]
+    },
+    "编码委派与模型 CLI": {
+      "order": 110,
+      "description": "把编码任务交给 Codex、Claude Code、OpenCode 或其他模型 CLI 时。",
+      "relation_kind": "alternative",
+      "relation_label": "备选",
+      "relation_note": "这些入口存在功能重叠，通常按模型、宿主和工具权限选择一个主力。",
+      "related_subcategories": ["命令行入口"]
+    },
+    "命令行入口": {
+      "order": 120,
+      "description": "需要从终端进入对应产品或能力时。",
+      "relation_kind": "unknown",
+      "relation_label": "关系未判定",
+      "relation_note": "CLI 是执行入口；与方法型 Skill 的关系要结合具体任务确认。",
+      "related_subcategories": ["编码委派与模型 CLI"]
+    },
+    "模型运行、训练与评测": {
+      "order": 130,
+      "description": "运行本地模型、分布式训练、实验追踪或进行模型基准评测时。",
+      "relation_kind": "mixed",
+      "relation_label": "混合关系",
+      "relation_note": "运行框架之间可能互为备选，训练、追踪和评测能力则多为前后配套。"
+    },
+    "调试、诊断与重构": {
+      "order": 140,
+      "description": "定位代码或工作流故障、验证假设、精简代码或安全重构时。",
+      "relation_kind": "mixed",
+      "relation_label": "混合关系",
+      "relation_note": "诊断方法可组合使用，具体调试器或重构入口则按技术栈选择。",
+      "related_subcategories": ["宿主连接与故障排查", "测试与产品验收"]
+    },
+    "测试与产品验收": {
+      "order": 150,
+      "description": "验证产品行为、开展探索式验收或用测试驱动实现时。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "测试设计与浏览器执行通常前后配合，但这里不宣称已经验证自动串联。",
+      "related_subcategories": ["浏览器自动化", "调试、诊断与重构"]
+    },
+    "Web 应用与站点构建": {
+      "order": 160,
+      "description": "构建、预览或发布 Web 应用和站点时。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "设计方法、构建能力和浏览器验收通常处于同一交付链路。",
+      "related_subcategories": ["界面设计、图表与动效", "浏览器自动化"]
+    },
+    "浏览器自动化": {
+      "order": 170,
+      "description": "需要操作页面、检查交互或验证本地 Web 应用时。",
+      "relation_kind": "mixed",
+      "relation_label": "混合关系",
+      "relation_note": "不同浏览器入口可能互为备选，测试与构建能力则通常作为配套。",
+      "related_subcategories": ["测试与产品验收", "Web 应用与站点构建"]
+    },
+    "界面设计、图表与动效": {
+      "order": 180,
+      "description": "设计界面、信息图、架构图、交互动效或视觉原型时。",
+      "relation_kind": "mixed",
+      "relation_label": "混合关系",
+      "relation_note": "有些能力按输出形式分工，有些则提供相近的设计或原型入口。",
+      "related_subcategories": ["视觉设计与创意生产", "Web 应用与站点构建"]
+    },
+    "图像生成、编辑与视觉资产": {
+      "order": 190,
+      "description": "生成图像、分割主体、编辑视觉素材或制作资产预览时。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "生成、分割、编辑和交付预览覆盖视觉资产流程中的不同环节。",
+      "related_subcategories": ["视觉设计与创意生产"]
+    },
+    "视觉设计与创意生产": {
+      "order": 200,
+      "description": "进行视觉创意、原型、画布编辑或营销素材生产时。",
+      "relation_kind": "mixed",
+      "relation_label": "混合关系",
+      "relation_note": "多个产品入口存在重叠，但画布连接、创意方法和生产工具也可配套。",
+      "related_subcategories": ["界面设计、图表与动效", "图像生成、编辑与视觉资产"]
+    },
+    "视频、动画与分镜": {
+      "order": 210,
+      "description": "制作分镜、动画、网页视频、画布视频或实时视觉时。",
+      "relation_kind": "mixed",
+      "relation_label": "混合关系",
+      "relation_note": "不同制作方式可作为备选，分镜、动画与连接入口也可能前后配套。"
+    },
+    "音频、音乐与歌曲": {
+      "order": 220,
+      "description": "生成歌曲、设计音乐提示或分析音频特征时。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "创作提示、生成和可视化分析分别覆盖不同环节。"
+    },
+    "文档、PDF 与演示": {
+      "order": 230,
+      "description": "创建、编辑、排版、提取或转换 Word、PDF 和演示文稿时。",
+      "relation_kind": "mixed",
+      "relation_label": "混合关系",
+      "relation_note": "同格式工具可能互为备选，不同格式和处理阶段则通常互补。",
+      "related_subcategories": ["文档、演示与内容协作"]
+    },
+    "文档、演示与内容协作": {
+      "order": 240,
+      "description": "在文档、PDF、演示、模板或云端内容中协作时。",
+      "relation_kind": "mixed",
+      "relation_label": "混合关系",
+      "relation_note": "既有相近的内容制作入口，也有邮件、云盘和模板等配套环节。",
+      "related_subcategories": ["文档、PDF 与演示"]
+    },
+    "文件与媒体交付": {
+      "order": 250,
+      "description": "把本地文件或媒体作为可访问附件交付时。",
+      "relation_kind": "unknown",
+      "relation_label": "关系未判定",
+      "relation_note": "当前仅有单一交付入口，不建立替代或链路判断。"
+    },
+    "写作润色与表达": {
+      "order": 260,
+      "description": "降低 AI 腔、校准文字声线或润色表达时。",
+      "relation_kind": "unknown",
+      "relation_label": "关系未判定",
+      "relation_note": "当前仅有单一入口，不建立替代或互补判断。"
+    },
+    "邮件、消息与会议": {
+      "order": 270,
+      "description": "处理邮件、短信、群组互动或会议摘要时。",
+      "relation_kind": "mixed",
+      "relation_label": "混合关系",
+      "relation_note": "不同渠道彼此独立；同一沟通任务中也可能按渠道组合使用。"
+    },
+    "表格、数据库与知识库": {
+      "order": 280,
+      "description": "操作表格、数据库、Notebook 或知识库内容时。",
+      "relation_kind": "mixed",
+      "relation_label": "混合关系",
+      "relation_note": "同类数据入口可能重叠，不同存储和分析环节通常按数据位置配套。",
+      "related_subcategories": ["数据、表格与业务分析"]
+    },
+    "数据、表格与业务分析": {
+      "order": 290,
+      "description": "分析业务数据、处理电子表格或连接结构化数据服务时。",
+      "relation_kind": "mixed",
+      "relation_label": "混合关系",
+      "relation_note": "数据源、分析方法和展示入口各有分工，部分产品能力也会重叠。",
+      "related_subcategories": ["表格、数据库与知识库", "地图、市场与行业数据"]
+    },
+    "地图、市场与行业数据": {
+      "order": 300,
+      "description": "查询地图路线、预测市场或行业数据时。",
+      "relation_kind": "unknown",
+      "relation_label": "关系未判定",
+      "relation_note": "数据领域不同，不能仅因同属数据查询而判为可替代。",
+      "related_subcategories": ["数据、表格与业务分析"]
+    },
+    "网页检索与知识获取": {
+      "order": 310,
+      "description": "从网页、视频字幕、RSS、社交平台或本地知识库获取信息时。",
+      "relation_kind": "mixed",
+      "relation_label": "混合关系",
+      "relation_note": "不同来源可并行补充；同一来源的入口则可能互为备选。",
+      "related_subcategories": ["学术检索与论文", "来源核验与引用"]
+    },
+    "学术检索与论文": {
+      "order": 320,
+      "description": "检索、阅读或组织机器学习与学术论文时。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "论文检索与论文全流程处理覆盖不同深度。",
+      "related_subcategories": ["网页检索与知识获取", "来源核验与引用"]
+    },
+    "来源核验与引用": {
+      "order": 330,
+      "description": "需要让结论附带可核验来源和引用时。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "通常接在检索或研究之后，用来验证和组织证据。",
+      "related_subcategories": ["网页检索与知识获取", "学术检索与论文"]
+    },
+    "桌面与 macOS 自动化": {
+      "order": 340,
+      "description": "操作 macOS 应用、设备、提醒事项或桌面环境时。",
+      "relation_kind": "mixed",
+      "relation_label": "混合关系",
+      "relation_note": "各 Skill 面向不同系统对象；通用桌面控制可作为相邻执行入口。",
+      "related_subcategories": ["桌面自动化"]
+    },
+    "桌面自动化": {
+      "order": 350,
+      "description": "通过桌面控制插件或 MCP 操作本地应用时。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "Plugin 提供能力包，MCP 提供连接入口；来源关系以扫描事实为准。",
+      "related_subcategories": ["桌面与 macOS 自动化"]
+    },
+    "安全扫描与审查": {
+      "order": 360,
+      "description": "对代码库开展安全扫描、审查或漏洞分析时。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "Plugin 与 MCP 可能来自同一能力包；是否可执行仍需到详情核对。"
+    },
+    "代码托管与持续集成": {
+      "order": 370,
+      "description": "管理 GitHub 项目或运行持续集成流程时。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "代码托管与 CI 通常处在同一交付链路的不同环节。",
+      "related_subcategories": ["GitHub 与代码协作"]
+    },
+    "OpenAI 开发": {
+      "order": 380,
+      "description": "构建或排查 OpenAI API、Agents SDK 与 ChatGPT Apps 时。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "开发方法与本地确认连接入口覆盖不同职责；来源关系以扫描事实为准。"
+    },
+    "开发依赖与 SDK": {
+      "order": 390,
+      "description": "开发插件或 MCP 服务时需要对应 SDK 依赖。",
+      "relation_kind": "unknown",
+      "relation_label": "关系未判定",
+      "relation_note": "SDK 是依赖关系；只有扫描到精确插件来源时才显示来源关联。"
+    },
+    "Seedance 提示词 · 通用型": {
+      "order": 400,
+      "description": "把剧本、分镜或创意想法转成通用 Seedance 视频提示词。",
+      "relation_kind": "alternative",
+      "relation_label": "备选",
+      "relation_note": "目标高度重叠，通常先选一个主力，再根据提示结构与模型版本比较。"
+    },
+    "Seedance 提示词 · 特化场景": {
+      "order": 410,
+      "description": "处理白模、连续性、复杂运镜或救片等特殊视频任务。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "每项针对不同特殊输入，按具体场景补充，而不是彼此直接替代。"
+    },
+    "反推与提示词提取": {
+      "order": 420,
+      "description": "从已有图片或视频反推结构、风格、动作与提示词。",
+      "relation_kind": "alternative",
+      "relation_label": "备选",
+      "relation_note": "目标相近，但输入媒体和可控维度不同，需要按素材类型比较。"
+    },
+    "电影感生图与视觉资产": {
+      "order": 430,
+      "description": "生成电影感画面、角色多视图或成套视觉资产。",
+      "relation_kind": "alternative",
+      "relation_label": "备选",
+      "relation_note": "多项能力争夺同一主输出，但在角色一致性和资产形式上各有侧重。"
+    },
+    "配乐、音效与混音": {
+      "order": 440,
+      "description": "为视频或内容制作配乐、音效和最终混音。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "配乐、音效与混音处于同一音频链路的不同环节。"
+    },
+    "色彩 · 材质 · 画质": {
+      "order": 450,
+      "description": "优化色彩体系、材质表现或最终画质。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "分别处理视觉质量的不同维度，可按需要组合。"
+    },
+    "人像与社媒生图": {
+      "order": 460,
+      "description": "制作人像写真、自拍感或社交媒体传播图。",
+      "relation_kind": "mixed",
+      "relation_label": "混合关系",
+      "relation_note": "输出目标相近，但人物类型、平台风格和生成流程不同。"
+    },
+    "编剧与剧本": {
+      "order": 470,
+      "description": "创作、改写或评估电影、短剧与视频剧本。",
+      "relation_kind": "alternative",
+      "relation_label": "备选",
+      "relation_note": "多个方法可能争夺同一写作任务，需按体裁与产出深度选择。"
+    },
+    "写作方法论": {
+      "order": 480,
+      "description": "建立可复用的写作原则、结构与检查方法。",
+      "relation_kind": "unknown",
+      "relation_label": "关系未判定",
+      "relation_note": "当前以方法积累为主，不预设替代或链路关系。"
+    },
+    "网文全家桶": {
+      "order": 490,
+      "description": "覆盖网文选题、设定、章节写作、连载与复盘。",
+      "relation_kind": "complementary",
+      "relation_label": "互补",
+      "relation_note": "不同能力覆盖网文生产链路的不同环节。"
+    },
+    "广告与爆款分析": {
+      "order": 500,
+      "description": "分析广告创意、传播结构与爆款内容模式。",
+      "relation_kind": "mixed",
+      "relation_label": "混合关系",
+      "relation_note": "分析视角可互补，面向同一素材时也可能提供相近结论。"
+    }
+  }
+}

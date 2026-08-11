@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "description": "Public starter taxonomy. Personal collection overrides are intentionally not distributed.",
+  "scenario": {
+    "groups": [],
+    "overrides": {},
+    "rules": []
+  },
+  "assets": {
+    "overrides": {}
+  }
+}

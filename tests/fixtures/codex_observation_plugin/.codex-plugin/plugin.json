@@ -1,0 +1,6 @@
+{
+  "name": "codex-observation-plugin",
+  "description": "Fixture plugin for read-only Codex metadata observation.",
+  "version": "1.2.3",
+  "license": "MIT"
+}

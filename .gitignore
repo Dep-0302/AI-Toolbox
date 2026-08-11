@@ -1,0 +1,12 @@
+node_modules/
+dist/
+generated/
+.env
+.env.*
+!.env.example
+*.local.json
+.ai-toolbox-lock.sha256
+registry/chinese_metadata.json.bak-*
+__pycache__/
+*.py[cod]
+.DS_Store

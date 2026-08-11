@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "fixture-stdio": {
+      "title": "must-not-leak-sensitive-title",
+      "description": "must-not-leak-sensitive-description",
+      "command": "must-not-leak-command",
+      "args": ["--token", "must-not-leak-argument"],
+      "cwd": "/must/not/leak",
+      "env": {
+        "FIXTURE_TOKEN": "must-not-leak-token"
+      },
+      "headers": {
+        "Authorization": "must-not-leak-header"
+      }
+    }
+  }
+}

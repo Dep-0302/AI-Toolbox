@@ -1,0 +1,17 @@
+# ── 生成产物：脚本可随时重建，不进版本库 ──
+# 设计基线请看 baseline/技能能力工作台.html
+/inventory.html
+/report.html
+/workbench.html
+/data.js
+/data.json
+/decisions.js
+/decisions.json
+/技能清理清单.md
+/*.local.json
+
+# ── 系统与运行时垃圾 ──
+.DS_Store
+__pycache__/
+*.pyc
+.venv/

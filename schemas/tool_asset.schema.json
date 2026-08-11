@@ -1,0 +1,936 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.ai-os.invalid/schemas/tool-asset.schema.json",
+  "title": "AI-Toolbox read-only ToolAsset snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generation_id", "generated_at", "mode", "summary", "hosts", "items", "health_findings", "scan_scope", "scan_errors"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "generation_id": {"type": "string", "pattern": "^[a-f0-9]{16}$"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "mode": {"const": "observe"},
+    "summary": {"$ref": "#/$defs/summary"},
+    "hosts": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"id": {"const": "codex"}},
+            "required": ["id"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"id": {"const": "claude"}},
+            "required": ["id"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"id": {"const": "hermes"}},
+            "required": ["id"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"id": {"const": "workbuddy"}},
+            "required": ["id"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {"id": {"const": "antigravity"}},
+            "required": ["id"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ],
+      "items": {"$ref": "#/$defs/host"}
+    },
+    "items": {"type": "array", "items": {"$ref": "#/$defs/asset"}},
+    "health_findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "scan_scope": {"$ref": "#/$defs/scan_scope"},
+    "scan_errors": {"type": "array", "items": {"$ref": "#/$defs/scan_error"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "nullable_sha256": {"oneOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "nullable_string": {"type": ["string", "null"]},
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["asset_count", "counts_by_type", "host_binding_count", "localized_skill_count", "stale_localization_count", "locked_asset_count", "health_finding_count", "scan_error_count"],
+      "properties": {
+        "asset_count": {"type": "integer", "minimum": 0},
+        "counts_by_type": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["skill", "plugin", "mcp", "cli", "sdk"],
+          "properties": {
+            "skill": {"type": "integer", "minimum": 0},
+            "plugin": {"type": "integer", "minimum": 0},
+            "mcp": {"type": "integer", "minimum": 0},
+            "cli": {"type": "integer", "minimum": 0},
+            "sdk": {"type": "integer", "minimum": 0}
+          }
+        },
+        "host_binding_count": {"type": "integer", "minimum": 0},
+        "localized_skill_count": {"type": "integer", "minimum": 0},
+        "stale_localization_count": {"type": "integer", "minimum": 0},
+        "locked_asset_count": {"type": "integer", "minimum": 0},
+        "health_finding_count": {"type": "integer", "minimum": 0},
+        "scan_error_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "kind", "status", "safe_metadata_only"],
+      "properties": {
+        "id": {"enum": ["codex", "claude", "hermes", "workbuddy", "antigravity"]},
+        "label": {"type": "string", "minLength": 1},
+        "kind": {"const": "host"},
+        "status": {"enum": ["observed", "missing", "partial", "placeholder", "error"]},
+        "safe_metadata_only": {"type": "boolean"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"id": {"const": "codex"}}, "required": ["id"]},
+          "then": {"properties": {"label": {"const": "Codex"}, "safe_metadata_only": {"const": false}, "status": {"not": {"const": "placeholder"}}}}
+        },
+        {
+          "if": {"properties": {"id": {"const": "claude"}}, "required": ["id"]},
+          "then": {"properties": {"label": {"const": "Claude"}, "safe_metadata_only": {"const": false}, "status": {"not": {"const": "placeholder"}}}}
+        },
+        {
+          "if": {"properties": {"id": {"const": "hermes"}}, "required": ["id"]},
+          "then": {"properties": {"label": {"const": "Hermes"}, "safe_metadata_only": {"const": false}, "status": {"not": {"const": "placeholder"}}}}
+        },
+        {
+          "if": {"properties": {"id": {"const": "workbuddy"}}, "required": ["id"]},
+          "then": {"properties": {"label": {"const": "WorkBuddy"}, "safe_metadata_only": {"const": false}, "status": {"not": {"const": "placeholder"}}}}
+        },
+        {
+          "if": {"properties": {"id": {"const": "antigravity"}}, "required": ["id"]},
+          "then": {"properties": {"label": {"const": "Antigravity"}, "safe_metadata_only": {"const": true}, "status": {"const": "placeholder"}}}
+        }
+      ]
+    },
+    "package_variant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_ref", "host_id", "observed_path", "package_fingerprint", "package_fingerprint_status"],
+      "properties": {
+        "source_ref": {"type": "string", "minLength": 1},
+        "host_id": {"type": ["string", "null"], "enum": ["codex", "claude", "hermes", "workbuddy", "antigravity", null]},
+        "observed_path": {"$ref": "#/$defs/nullable_string"},
+        "package_fingerprint": {"$ref": "#/$defs/nullable_sha256"},
+        "package_fingerprint_status": {"enum": ["complete", "incomplete"]}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "version", "author", "license", "origin_kind", "origin_basis", "display_name", "source_refs", "manifest_fingerprint", "package_fingerprint_status", "package_fingerprints", "package_variants", "observation"],
+      "properties": {
+        "ref": {"type": "string", "minLength": 1},
+        "version": {"$ref": "#/$defs/nullable_string"},
+        "author": {"$ref": "#/$defs/nullable_string"},
+        "license": {"$ref": "#/$defs/nullable_string"},
+        "origin_kind": {"enum": ["github", "website", "chat", "local", "system", "unknown"]},
+        "origin_basis": {"enum": ["download_metadata", "frontmatter", "hermes_bundled_manifest", "hermes_skill_registry", "workbuddy_skill_metadata", "conflicting_evidence", "unavailable"]},
+        "display_name": {"$ref": "#/$defs/nullable_string"},
+        "source_refs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "manifest_fingerprint": {"$ref": "#/$defs/sha256"},
+        "package_fingerprint_status": {"enum": ["complete", "divergent", "incomplete"]},
+        "package_fingerprints": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/sha256"}},
+        "package_variants": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/package_variant"}},
+        "observation": {"$ref": "#/$defs/observation"}
+      }
+    },
+    "observation": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["adapter_id", "basis", "plugin_channel", "plugin_name", "plugin_version", "server_id", "transport_kind", "sensitive_config_present", "cli_name", "sdk_package_name"],
+          "properties": {
+            "adapter_id": {"enum": ["codex_plugin_mcp_v1", "codex_cli_metadata_v1", "codex_plugin_sdk_v1"]},
+            "basis": {"enum": ["cache_manifest_projection", "filesystem_metadata_projection", "dependency_manifest_projection"]},
+            "plugin_channel": {"$ref": "#/$defs/nullable_string"},
+            "plugin_name": {"$ref": "#/$defs/nullable_string"},
+            "plugin_version": {"$ref": "#/$defs/nullable_string"},
+            "server_id": {"$ref": "#/$defs/nullable_string"},
+            "transport_kind": {"type": ["string", "null"], "enum": ["stdio", "http", "ambiguous", "unknown", null]},
+            "sensitive_config_present": {"type": ["boolean", "null"]},
+            "cli_name": {"$ref": "#/$defs/nullable_string"},
+            "sdk_package_name": {"$ref": "#/$defs/nullable_string"}
+          }
+        }
+      ]
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host_id", "presence", "provisioning", "link_health", "activation", "effective", "action", "locked_reason", "observed_path", "link_target", "package_fingerprint", "package_fingerprint_status"],
+      "properties": {
+        "host_id": {"enum": ["codex", "claude", "hermes", "workbuddy", "antigravity"]},
+        "presence": {"enum": ["present", "cached", "unknown"]},
+        "provisioning": {"enum": ["copy", "unmanaged_symlink", "cache", "system_managed", "configured", "none"]},
+        "link_health": {"enum": ["ok", "na"]},
+        "activation": {"const": "unknown"},
+        "effective": {"const": "unverified"},
+        "action": {"const": "locked"},
+        "locked_reason": {"enum": ["read_only_inventory", "read_only_cache_inventory", "system_managed", "safe_metadata_only"]},
+        "observed_path": {"$ref": "#/$defs/nullable_string"},
+        "link_target": {"$ref": "#/$defs/nullable_string"},
+        "package_fingerprint": {"$ref": "#/$defs/nullable_sha256"},
+        "package_fingerprint_status": {"enum": ["complete", "incomplete"]}
+      }
+    },
+    "localization_missing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "coverage_complete", "translated_from_hash"],
+      "properties": {
+        "status": {"const": "missing"},
+        "coverage_complete": {"const": false},
+        "translated_from_hash": {"type": "null"}
+      }
+    },
+    "localization_complete": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["asset_id", "zh_name", "source_name", "summary", "use_cases", "not_for", "examples", "synonyms", "source_ref", "translated_from_hash", "status", "generated_at", "reviewed_at", "evidence", "coverage_complete"],
+      "properties": {
+        "asset_id": {"type": "string", "minLength": 1},
+        "zh_name": {"type": "string", "minLength": 1},
+        "source_name": {"type": "string", "minLength": 1},
+        "summary": {"type": "string", "minLength": 1},
+        "use_cases": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "not_for": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "examples": {"type": "array", "minItems": 1, "maxItems": 3, "items": {"type": "string", "minLength": 1}},
+        "synonyms": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "source_ref": {"type": "string", "minLength": 1},
+        "translated_from_hash": {"$ref": "#/$defs/sha256"},
+        "status": {"enum": ["ai_draft", "reviewed", "stale"]},
+        "generated_at": {"type": "string", "format": "date-time"},
+        "reviewed_at": {"type": ["string", "null"], "format": "date-time"},
+        "evidence": {"type": "array", "items": {"type": "string"}},
+        "coverage_complete": {"type": "boolean"}
+      }
+    },
+    "trust": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["review_state", "license_state", "risk_level", "action", "locked_reason"],
+      "properties": {
+        "review_state": {"enum": ["unreviewed", "vetted", "blocked"]},
+        "license_state": {"enum": ["declared", "unknown", "restricted", "incompatible"]},
+        "risk_level": {"enum": ["unknown", "low", "medium", "high", "critical"]},
+        "action": {"const": "locked"},
+        "locked_reason": {"enum": ["read_only_inventory", "package_divergence", "package_fingerprint_incomplete", "safe_metadata_only"]}
+      }
+    },
+    "curation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "common", "archived"],
+      "properties": {
+        "category": {"type": "string", "minLength": 1},
+        "subcategory": {
+          "oneOf": [
+            {"type": "string", "minLength": 1},
+            {"type": "null"}
+          ]
+        },
+        "common": {"type": "boolean"},
+        "archived": {"type": "boolean"}
+      }
+    },
+    "composition": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "name"],
+        "properties": {
+          "type": {"enum": ["skill", "mcp", "cli"]},
+          "name": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "duplicate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exact_duplicate", "occurrence_count", "name_collision", "package_divergence"],
+      "properties": {
+        "exact_duplicate": {"type": "boolean"},
+        "occurrence_count": {"type": "integer", "minimum": 1},
+        "name_collision": {"type": "boolean"},
+        "package_divergence": {"type": "boolean"}
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["asset_id", "type", "source_name", "description", "source", "fingerprint", "manifest_fingerprint", "host_bindings", "localization", "trust", "curation", "composition", "duplicate"],
+      "properties": {
+        "asset_id": {"type": "string", "minLength": 1},
+        "type": {"enum": ["skill", "plugin", "mcp", "cli", "sdk"]},
+        "source_name": {"type": "string", "minLength": 1},
+        "description": {"type": "string"},
+        "source": {"$ref": "#/$defs/source"},
+        "fingerprint": {"$ref": "#/$defs/sha256"},
+        "manifest_fingerprint": {"$ref": "#/$defs/sha256"},
+        "host_bindings": {"type": "array", "items": {"$ref": "#/$defs/binding"}},
+        "localization": {"oneOf": [{"$ref": "#/$defs/localization_missing"}, {"$ref": "#/$defs/localization_complete"}]},
+        "trust": {"$ref": "#/$defs/trust"},
+        "curation": {"$ref": "#/$defs/curation"},
+        "composition": {"$ref": "#/$defs/composition"},
+        "duplicate": {"$ref": "#/$defs/duplicate"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"type": {"const": "mcp"}}, "required": ["type"]},
+          "then": {"properties": {
+            "source": {"properties": {
+              "ref": {"pattern": "^~/\\.codex/plugins/cache/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/\\.mcp\\.json$"},
+              "source_refs": {"items": {"pattern": "^~/\\.codex/plugins/cache/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/\\.mcp\\.json$"}},
+              "package_variants": {"items": {"properties": {
+                "source_ref": {"pattern": "^~/\\.codex/plugins/cache/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/\\.mcp\\.json$"},
+                "observed_path": {"type": "string", "pattern": "^~/\\.codex/plugins/cache/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/\\.mcp\\.json$"}
+              }}}
+            }},
+            "host_bindings": {"items": {"properties": {
+              "host_id": {"const": "codex"},
+              "observed_path": {"type": "string", "pattern": "^~/\\.codex/plugins/cache/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/\\.mcp\\.json$"},
+              "link_target": {"type": "null"}
+            }}}
+          }}
+        },
+        {
+          "if": {"properties": {"type": {"const": "cli"}}, "required": ["type"]},
+          "then": {"properties": {
+            "source": {"properties": {
+              "ref": {"const": "~/.local/bin/codex"},
+              "source_refs": {"const": ["~/.local/bin/codex"]},
+              "package_variants": {"items": {"properties": {
+                "source_ref": {"const": "~/.local/bin/codex"},
+                "observed_path": {"const": "~/.local/bin/codex"}
+              }}}
+            }},
+            "host_bindings": {"items": {"properties": {
+              "host_id": {"const": "codex"},
+              "observed_path": {"const": "~/.local/bin/codex"},
+              "link_target": {"const": "~/.codex/plugins/.plugin-appserver/codex"}
+            }}}
+          }}
+        },
+        {
+          "if": {"properties": {"type": {"const": "sdk"}}, "required": ["type"]},
+          "then": {"properties": {
+            "source": {"properties": {
+              "ref": {"pattern": "^~/\\.codex/plugins/cache/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/node_modules/@modelcontextprotocol/sdk/package\\.json$"},
+              "source_refs": {"items": {"pattern": "^~/\\.codex/plugins/cache/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/node_modules/@modelcontextprotocol/sdk/package\\.json$"}},
+              "package_variants": {"items": {"properties": {
+                "source_ref": {"pattern": "^~/\\.codex/plugins/cache/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/node_modules/@modelcontextprotocol/sdk/package\\.json$"},
+                "observed_path": {"type": "string", "pattern": "^~/\\.codex/plugins/cache/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/node_modules/@modelcontextprotocol/sdk/package\\.json$"}
+              }}}
+            }},
+            "host_bindings": {"items": {"properties": {
+              "host_id": {"const": "codex"},
+              "observed_path": {"type": "string", "pattern": "^~/\\.codex/plugins/cache/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/node_modules/@modelcontextprotocol/sdk/package\\.json$"},
+              "link_target": {"type": "null"}
+            }}}
+          }}
+        }
+      ]
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "severity", "title", "detail"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "severity": {"enum": ["error", "warning", "info"]},
+        "title": {"type": "string", "minLength": 1},
+        "detail": {"type": "string", "minLength": 1},
+        "asset_id": {"type": "string"},
+        "host_id": {"type": "string"},
+        "path": {"type": "string"},
+        "target": {"type": "string"},
+        "reason": {"type": "string"},
+        "package_variants": {"type": "array", "items": {"$ref": "#/$defs/package_variant"}}
+      }
+    },
+    "root_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host_id", "asset_type", "path", "status", "entries_examined", "manifests_read", "transient_entries_excluded", "depth_limited_entries"],
+      "properties": {
+        "host_id": {"enum": ["codex", "claude", "hermes", "workbuddy"]},
+        "asset_type": {"enum": ["skill", "plugin"]},
+        "path": {"type": "string", "minLength": 1},
+        "status": {"enum": ["missing", "observed", "partial", "error", "blocked_symlink_root", "not_directory"]},
+        "entries_examined": {"type": "integer", "minimum": 0},
+        "manifests_read": {"type": "integer", "minimum": 0},
+        "transient_entries_excluded": {"type": "integer", "minimum": 0},
+        "depth_limited_entries": {"type": "integer", "minimum": 0}
+      },
+      "allOf": [
+        {"if": {"properties": {"host_id": {"const": "codex"}, "asset_type": {"const": "skill"}}, "required": ["host_id", "asset_type"]}, "then": {"properties": {"path": {"const": "~/.codex/skills"}}}},
+        {"if": {"properties": {"host_id": {"const": "codex"}, "asset_type": {"const": "plugin"}}, "required": ["host_id", "asset_type"]}, "then": {"properties": {"path": {"const": "~/.codex/plugins/cache"}}}},
+        {"if": {"properties": {"host_id": {"const": "claude"}, "asset_type": {"const": "skill"}}, "required": ["host_id", "asset_type"]}, "then": {"properties": {"path": {"const": "~/.claude/skills"}}}},
+        {"if": {"properties": {"host_id": {"const": "claude"}, "asset_type": {"const": "plugin"}}, "required": ["host_id", "asset_type"]}, "then": {"properties": {"path": {"const": "~/.claude/plugins/cache"}}}},
+        {"if": {"properties": {"host_id": {"const": "hermes"}, "asset_type": {"const": "skill"}}, "required": ["host_id", "asset_type"]}, "then": {"properties": {"path": {"const": "~/.hermes/skills"}}}},
+        {"if": {"properties": {"host_id": {"const": "workbuddy"}, "asset_type": {"const": "skill"}}, "required": ["host_id", "asset_type"]}, "then": {"properties": {"path": {"const": "~/.workbuddy/skills"}}}}
+      ]
+    },
+    "coverage": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 25,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "codex"},
+              "asset_type": {"const": "skill"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "codex"},
+              "asset_type": {"const": "plugin"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "codex"},
+              "asset_type": {"const": "mcp"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "codex"},
+              "asset_type": {"const": "cli"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "codex"},
+              "asset_type": {"const": "sdk"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "claude"},
+              "asset_type": {"const": "skill"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "claude"},
+              "asset_type": {"const": "plugin"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "claude"},
+              "asset_type": {"const": "mcp"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "claude"},
+              "asset_type": {"const": "cli"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "claude"},
+              "asset_type": {"const": "sdk"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "hermes"},
+              "asset_type": {"const": "skill"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "hermes"},
+              "asset_type": {"const": "plugin"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "hermes"},
+              "asset_type": {"const": "mcp"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "hermes"},
+              "asset_type": {"const": "cli"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "hermes"},
+              "asset_type": {"const": "sdk"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "workbuddy"},
+              "asset_type": {"const": "skill"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "workbuddy"},
+              "asset_type": {"const": "plugin"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "workbuddy"},
+              "asset_type": {"const": "mcp"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "workbuddy"},
+              "asset_type": {"const": "cli"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "workbuddy"},
+              "asset_type": {"const": "sdk"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "antigravity"},
+              "asset_type": {"const": "skill"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "antigravity"},
+              "asset_type": {"const": "plugin"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "antigravity"},
+              "asset_type": {"const": "mcp"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "antigravity"},
+              "asset_type": {"const": "cli"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "host_id": {"const": "antigravity"},
+              "asset_type": {"const": "sdk"}
+            },
+            "required": ["host_id", "asset_type"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["host_id", "asset_type", "adapter_id", "status", "source_refs", "configured_source_count", "observed_source_count", "item_count"],
+        "properties": {
+          "host_id": {"enum": ["codex", "claude", "hermes", "workbuddy", "antigravity"]},
+          "asset_type": {"enum": ["skill", "plugin", "mcp", "cli", "sdk"]},
+          "adapter_id": {"type": ["string", "null"]},
+          "status": {"enum": ["observed", "partial", "missing", "not_connected", "placeholder", "error"]},
+          "source_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+          "configured_source_count": {"type": "integer", "minimum": 0},
+          "observed_source_count": {"type": "integer", "minimum": 0},
+          "item_count": {"type": "integer", "minimum": 0}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"status": {"enum": ["not_connected", "placeholder"]}}, "required": ["status"]},
+            "then": {
+              "properties": {
+                "adapter_id": {"type": "null"},
+                "source_refs": {"maxItems": 0},
+                "configured_source_count": {"const": 0},
+                "observed_source_count": {"const": 0},
+                "item_count": {"const": 0}
+              }
+            },
+            "else": {
+              "properties": {
+                "adapter_id": {"type": "string", "minLength": 1},
+                "source_refs": {"minItems": 1},
+                "configured_source_count": {"minimum": 1}
+              }
+            }
+          },
+          {
+            "if": {"properties": {"status": {"const": "missing"}}, "required": ["status"]},
+            "then": {
+              "properties": {
+                "observed_source_count": {"const": 0},
+                "item_count": {"const": 0}
+              }
+            }
+          },
+          {
+            "if": {
+              "allOf": [
+                {"properties": {"status": {"const": "observed"}}, "required": ["status"]},
+                {
+                  "anyOf": [
+                    {"properties": {"host_id": {"enum": ["codex", "claude", "hermes", "workbuddy"]}, "asset_type": {"const": "skill"}}, "required": ["host_id", "asset_type"]},
+                    {"properties": {"host_id": {"enum": ["codex", "claude"]}, "asset_type": {"const": "plugin"}}, "required": ["host_id", "asset_type"]},
+                    {"properties": {"host_id": {"const": "codex"}, "asset_type": {"const": "cli"}}, "required": ["host_id", "asset_type"]}
+                  ]
+                }
+              ]
+            },
+            "then": {"properties": {"observed_source_count": {"minimum": 1}}}
+          },
+          {
+            "if": {"properties": {"host_id": {"const": "antigravity"}}, "required": ["host_id"]},
+            "then": {"properties": {"status": {"const": "placeholder"}, "adapter_id": {"type": "null"}}}
+          },
+          {
+            "if": {
+              "properties": {
+                "host_id": {"enum": ["claude", "hermes", "workbuddy"]},
+                "asset_type": {"enum": ["mcp", "cli", "sdk"]}
+              },
+              "required": ["host_id", "asset_type"]
+            },
+            "then": {"properties": {"status": {"const": "not_connected"}, "adapter_id": {"type": "null"}}}
+          },
+          {
+            "if": {
+              "properties": {
+                "host_id": {"enum": ["hermes", "workbuddy"]},
+                "asset_type": {"const": "plugin"}
+              },
+              "required": ["host_id", "asset_type"]
+            },
+            "then": {"properties": {"status": {"const": "not_connected"}, "adapter_id": {"type": "null"}}}
+          },
+          {
+            "if": {
+              "properties": {
+                "host_id": {"enum": ["codex", "claude", "hermes", "workbuddy"]},
+                "asset_type": {"const": "skill"}
+              },
+              "required": ["host_id", "asset_type"]
+            },
+            "then": {"properties": {"adapter_id": {"const": "manifest_directory_v1"}, "status": {"enum": ["observed", "partial", "missing", "error"]}}}
+          },
+          {
+            "if": {
+              "properties": {
+                "host_id": {"enum": ["codex", "claude"]},
+                "asset_type": {"const": "plugin"}
+              },
+              "required": ["host_id", "asset_type"]
+            },
+            "then": {"properties": {"adapter_id": {"const": "manifest_directory_v1"}, "status": {"enum": ["observed", "partial", "missing", "error"]}}}
+          },
+          {
+            "if": {"properties": {"host_id": {"const": "codex"}, "asset_type": {"const": "mcp"}}, "required": ["host_id", "asset_type"]},
+            "then": {"properties": {
+              "adapter_id": {"const": "codex_plugin_mcp_v1"},
+              "configured_source_count": {"const": 1},
+              "status": {"enum": ["observed", "partial", "missing", "error"]},
+              "source_refs": {
+                "contains": {"const": "~/.codex/plugins/cache"},
+                "minContains": 1,
+                "maxContains": 1,
+                "items": {"oneOf": [
+                  {"const": "~/.codex/plugins/cache"},
+                  {"type": "string", "pattern": "^~/\\.codex/plugins/cache/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/\\.mcp\\.json$"}
+                ]}
+              }
+            }}
+          },
+          {
+            "if": {"properties": {"host_id": {"const": "codex"}, "asset_type": {"const": "cli"}}, "required": ["host_id", "asset_type"]},
+            "then": {"properties": {
+              "adapter_id": {"const": "codex_cli_metadata_v1"},
+              "configured_source_count": {"const": 1},
+              "observed_source_count": {"maximum": 1},
+              "status": {"enum": ["observed", "partial", "missing", "error"]},
+              "source_refs": {
+                "minItems": 2,
+                "maxItems": 2,
+                "allOf": [
+                  {"contains": {"const": "~/.local/bin/codex"}, "minContains": 1, "maxContains": 1},
+                  {"contains": {"const": "~/.codex/plugins/.plugin-appserver/codex"}, "minContains": 1, "maxContains": 1}
+                ]
+              }
+            }}
+          },
+          {
+            "if": {"properties": {"host_id": {"const": "codex"}, "asset_type": {"const": "sdk"}}, "required": ["host_id", "asset_type"]},
+            "then": {"properties": {
+              "adapter_id": {"const": "codex_plugin_sdk_v1"},
+              "configured_source_count": {"const": 1},
+              "status": {"enum": ["observed", "partial", "missing", "error"]},
+              "source_refs": {
+                "contains": {"const": "~/.codex/plugins/cache"},
+                "minContains": 1,
+                "maxContains": 1,
+                "items": {"oneOf": [
+                  {"const": "~/.codex/plugins/cache"},
+                  {"type": "string", "pattern": "^~/\\.codex/plugins/cache/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/package\\.json$"},
+                  {"type": "string", "pattern": "^~/\\.codex/plugins/cache/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/(?!(?:\\.{1,2})/)[^/]+/node_modules/@modelcontextprotocol/sdk/package\\.json$"}
+                ]}
+              }
+            }}
+          }
+        ]
+      }
+    },
+    "scan_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode", "home", "roots", "coverage", "limits", "excluded", "safety"],
+      "properties": {
+        "mode": {"const": "read_only"},
+        "home": {"const": "~/."},
+        "roots": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "allOf": [
+            {"contains": {"type": "object", "properties": {"host_id": {"const": "codex"}, "asset_type": {"const": "skill"}}, "required": ["host_id", "asset_type"]}, "minContains": 1, "maxContains": 1},
+            {"contains": {"type": "object", "properties": {"host_id": {"const": "codex"}, "asset_type": {"const": "plugin"}}, "required": ["host_id", "asset_type"]}, "minContains": 1, "maxContains": 1},
+            {"contains": {"type": "object", "properties": {"host_id": {"const": "claude"}, "asset_type": {"const": "skill"}}, "required": ["host_id", "asset_type"]}, "minContains": 1, "maxContains": 1},
+            {"contains": {"type": "object", "properties": {"host_id": {"const": "claude"}, "asset_type": {"const": "plugin"}}, "required": ["host_id", "asset_type"]}, "minContains": 1, "maxContains": 1},
+            {"contains": {"type": "object", "properties": {"host_id": {"const": "hermes"}, "asset_type": {"const": "skill"}}, "required": ["host_id", "asset_type"]}, "minContains": 1, "maxContains": 1},
+            {"contains": {"type": "object", "properties": {"host_id": {"const": "workbuddy"}, "asset_type": {"const": "skill"}}, "required": ["host_id", "asset_type"]}, "minContains": 1, "maxContains": 1}
+          ],
+          "items": {"$ref": "#/$defs/root_scope"}
+        },
+        "coverage": {"$ref": "#/$defs/coverage"},
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max_file_bytes", "max_overlay_bytes", "max_package_file_bytes", "max_package_bytes", "max_package_files", "max_depth", "max_entries_per_root", "scan_timeout_seconds", "max_text_length"],
+          "properties": {
+            "max_file_bytes": {"const": 262144},
+            "max_overlay_bytes": {"const": 2097152},
+            "max_package_file_bytes": {"const": 4194304},
+            "max_package_bytes": {"const": 33554432},
+            "max_package_files": {"const": 2000},
+            "max_depth": {"const": 5},
+            "max_entries_per_root": {"const": 5000},
+            "scan_timeout_seconds": {"const": 8.0},
+            "max_text_length": {"const": 4000}
+          }
+        },
+        "excluded": {"const": ["/Applications", "browser_sessions", "credentials", "cookies", "ssh_aws", "other_projects", ".git", "unapproved_config_bodies", "codex_config_auth_and_global_state", "codex_logs_sessions_and_databases", "codex_dynamic_runtime_caches", "binaries", "path_wide_cli_discovery", "recursive_dependency_scans", "out_of_allowlist_symlinks", "ephemeral_system_managed_skills"]},
+        "safety": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["writes", "network", "process_execution", "follows_outside_symlinks", "reads_host_config_bodies"],
+          "properties": {
+            "writes": {"const": false},
+            "network": {"const": false},
+            "process_execution": {"const": false},
+            "follows_outside_symlinks": {"const": false},
+            "reads_host_config_bodies": {"const": false}
+          }
+        }
+      }
+    },
+    "scan_error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "host_id": {"type": "string"},
+        "path": {"type": "string"},
+        "message": {"type": "string"}
+      }
+    }
+  }
+}

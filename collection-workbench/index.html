@@ -1,0 +1,1749 @@
+<!DOCTYPE html><html lang="zh"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>技能能力工作台</title><style>
+:root{--bg:#f5f6f4;--card:#fff;--line:#dfe3e8;--line-soft:#edf0f3;--ink:#172033;--dim:#697386;--faint:#697386;
+--sel:#315bd6;--sel-bg:#edf3ff;--amber:#bf7500;--amber-bg:#fff6e6;--green:#0f8b6d;--green-bg:#eaf8f3;
+--merge:#7658d6;--merge-bg:#f1efff;--danger:#c84646;--danger-bg:#fff0ef;
+--group-bg:#eceef2;--group-ink:#273142}
+*{box-sizing:border-box}
+body{margin:0;padding:0 24px 140px;background:var(--bg);color:var(--ink);
+font:14px/1.6 Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC","Microsoft YaHei",sans-serif;
+text-rendering:optimizeLegibility}
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible{
+outline:3px solid rgba(49,91,214,.22);outline-offset:2px}
+::selection{color:#142149;background:#dce7ff}
+*{scrollbar-width:thin;scrollbar-color:#c8cfda transparent}
+*::-webkit-scrollbar{width:9px;height:9px}
+*::-webkit-scrollbar-thumb{background:#c8cfda;border:2px solid transparent;border-radius:10px;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background:#aeb8c7;background-clip:padding-box}
+.wrap{max-width:1440px;margin:0 auto}
+h1{font-size:26px;margin:0 0 6px}
+.sub{color:var(--dim);font-size:13px;margin-bottom:14px}
+.alert{background:#fdf6e8;border:1px solid #f0dcb4;border-radius:11px;padding:14px 18px;
+margin-bottom:22px;font-size:13.5px;color:#7c4a06}
+.alert code{background:#fbe9c8;padding:1px 6px;border-radius:4px;font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.hint{display:grid;gap:9px;background:var(--card);border:1px solid var(--line);border-radius:12px;
+padding:12px 14px;color:var(--dim);font-size:12px;margin-bottom:24px}
+.hint-meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.hint-meta strong{color:var(--ink);font-size:13px}
+.hint-pill{display:inline-flex;align-items:center;min-height:22px;padding:2px 8px;border-radius:20px;
+background:#f2f4f7;color:#596477;font-size:10.5px;font-weight:650}
+.hint-pill.safe{background:var(--green-bg);color:var(--green)}
+.hint-copy{margin:0;max-width:1000px;color:var(--dim);line-height:1.55}
+
+/* ── 顶栏（sticky）── */
+#top{position:sticky;top:0;z-index:40;background:rgba(245,246,244,.97);backdrop-filter:blur(8px);
+border-bottom:1px solid var(--line);padding:14px 24px 10px;margin:0 -24px 18px}
+/* 嵌入 AI-Toolbox iframe 时：只藏掉自身标题（宿主已有标题），保留搜索/筛选/排序/进度/导入导出 */
+body.embedded #top .tt{display:none}
+body.embedded .wrap{padding-top:0}
+/* 嵌入时沿用宿主 Skill 库的冷蓝灰视觉，并把有效筛选收进一条紧凑工具栏。 */
+body.embedded{background:#f5f6f4;padding:0 2px 40px}
+body.embedded #top{background:rgba(255,255,255,.97);backdrop-filter:blur(10px);border:1px solid var(--line);
+border-radius:12px;margin:0 0 18px;padding:10px 11px}
+body.embedded .wrap,body.embedded #top .in{max-width:none}
+#top .in{max-width:1440px;margin:0 auto}
+#top .r1{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#top .tt{font-size:15px;font-weight:650;margin-right:4px;white-space:nowrap}
+.srch{position:relative;flex:1 1 300px;min-width:240px;max-width:520px}
+.srch input{width:100%;min-height:38px;font:inherit;font-size:12.5px;padding:8px 32px 8px 12px;border-radius:9px;
+border:1px solid #cfd5de;background:#fafbfc;outline:none;transition:border-color .14s,background .14s,box-shadow .14s}
+.srch input::placeholder{color:var(--dim)}
+.srch input:focus{border-color:#8ca6ee;background:#fff;box-shadow:0 0 0 3px rgba(49,91,214,.1)}
+.srch .x{position:absolute;right:8px;top:50%;transform:translateY(-50%);border:none;background:none;
+color:var(--dim);font-size:15px;cursor:pointer;padding:2px 4px;display:none}
+.srch.has .x{display:block}
+.fbtn,.srt,.tbtn{min-height:38px;font:inherit;font-size:12px;font-weight:620;padding:7px 11px;border-radius:9px;
+border:1px solid var(--line);background:#fff;cursor:pointer;color:#4c586b;transition:border-color .14s,color .14s,background .14s}
+.fbtn:hover,.srt:hover,.tbtn:hover{border-color:#aebee5;color:var(--sel);background:#fbfcff}
+.fbtn.on{border-color:var(--sel);background:var(--sel-bg);color:var(--sel);font-weight:600}
+.tbtn{position:relative}
+.tbtn .dotw{position:absolute;top:-4px;right:-4px;width:9px;height:9px;border-radius:50%;
+background:#ea8600;display:none}
+.tbtn.unsaved .dotw{display:block}
+#prog{cursor:pointer;user-select:none;text-align:right;min-width:108px;padding:3px 4px;background:transparent;border:0}
+#prog .pt{font-size:12.5px;color:var(--dim);white-space:nowrap}
+#prog .pb{height:3px;background:#e8ebef;border-radius:3px;margin-top:4px;overflow:hidden}
+#prog .pb i{display:block;height:100%;background:var(--sel);width:0}
+#prog.done .pt{color:var(--green);font-weight:600}
+#prog.done .pb i{background:var(--green)}
+#matchinfo{color:var(--dim);font-size:12.5px;white-space:nowrap}
+#chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+#chips:empty{display:none}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;padding:2px 6px 2px 10px;
+border-radius:20px;background:var(--sel-bg);color:var(--sel);cursor:pointer;border:1px solid #d8e0f8}
+.chip b{font-weight:600}
+.chip .cx{font-size:13px;line-height:1;opacity:.7}
+.chip:hover .cx{opacity:1}
+.chip.all{background:#f4f2ef;color:var(--dim);border-color:var(--line)}
+
+/* ── 筛选面板 ── */
+#fpanel{position:relative}
+#fpanel .pop{position:absolute;top:calc(100% + 6px);left:0;z-index:45;background:#fff;
+border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(28,25,23,.14);
+padding:16px 18px;width:640px;max-width:calc(100vw - 60px);display:none}
+#fpanel.show .pop{display:block}
+.fsec{margin-bottom:12px}
+.fsec:last-child{margin-bottom:0}
+.fsec .fl{font-size:12px;color:var(--dim);font-weight:600;margin-bottom:6px}
+.fopts{display:flex;gap:6px 14px;flex-wrap:wrap}
+.fopt{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;cursor:pointer;user-select:none}
+.fopt input{accent-color:var(--sel);margin:0}
+.fopt .fc{color:var(--dim);font-size:11px}
+.fopt.dis{opacity:.42;cursor:not-allowed}
+.fopt.dis input{cursor:not-allowed}
+
+/* ── 分组与卡片 ── */
+.grp{margin-bottom:40px;scroll-margin-top:76px}
+.gh{display:flex;align-items:center;gap:9px;min-height:44px;flex-wrap:wrap;margin-bottom:8px;padding:8px 11px;
+background:var(--group-bg);border-radius:8px}
+.group-title{color:var(--group-ink);font-size:18px;font-weight:740;letter-spacing:-.02em;line-height:1.35}
+.gprog{margin-left:auto;color:#667085;font-size:11px}
+.gprog.done{color:var(--green);font-weight:600}
+.gd{max-width:850px;margin:0 2px 14px;color:var(--dim);font-size:12.5px;line-height:1.55}
+.badge{font-size:10.5px;padding:2px 8px;border-radius:20px;font-weight:700}
+.badge.vs{background:var(--amber-bg);color:var(--amber)}
+.badge.co{background:var(--green-bg);color:var(--green)}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.c{position:relative;display:flex;min-width:0;min-height:326px;flex-direction:column;padding:16px 16px 13px;
+background:var(--card);border:1px solid var(--line);border-radius:13px;cursor:pointer;
+transition:border-color .14s ease,transform .14s ease,background .14s ease}
+.c:hover{border-color:#aebee5;transform:translateY(-1px)}
+.c.on{border-color:var(--sel);background:#f8faff}
+.c .nm{color:var(--ink);font-weight:720;font-size:15px;line-height:1.4;margin-bottom:3px;padding-right:25px;letter-spacing:-.01em}
+.en{font:10.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dim);margin-bottom:9px;word-break:break-all}
+.t.ok{background:#eef7f0;color:#15803d}
+details summary{cursor:pointer;outline:none}
+.c .ds{color:#596477;font-size:12px;line-height:1.62;
+display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.c .ds.exp{display:block;overflow:visible}
+.xpd{font-size:11px;font-weight:650;color:var(--sel);cursor:pointer;user-select:none;display:inline-block;margin-top:4px}
+.xpd:hover{text-decoration:underline}
+.dsbad{background:var(--amber-bg);border:1px solid #f0dcb4;border-radius:8px;color:#7c4a06;
+font-size:12px;padding:7px 10px;line-height:1.45}
+mark{background:#fde68a;border-radius:2px;padding:0 1px}
+.c .tags{margin-top:11px;display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.t{font-size:10px;line-height:1.45;padding:2px 7px;border-radius:20px;background:#f1f3f6;color:#667185}
+.t.p{background:#e8eefc;color:#2c4d9e}
+.t.w{background:var(--danger-bg);color:#a33e3e}
+.t.script{background:var(--merge-bg);color:#6047b5}
+.t.issue{background:var(--amber-bg);color:#9a6000;border:1px solid #ecd09c}
+.t.g{background:#fafbfc;color:#7f8998;border:1px dashed #c6cdd7;cursor:help}
+.gmark{font-size:9.5px;font-weight:700;color:var(--dim);cursor:help}
+.t.inst{background:var(--green);color:#fff;font-weight:600}
+.t.cp{background:#f1f3f6;color:#596477;border:1px solid #dfe3e8}
+.stuff{margin-top:11px;padding-top:10px;display:flex;gap:5px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line-soft)}
+.s0{font-size:10px;font-weight:650;color:var(--dim)}
+.s{font-size:10px;padding:2px 7px;border-radius:20px;background:#f2f4f7;color:#596477}
+.s.hi{background:#eef7f0;color:#15803d;font-weight:600}
+.bar{height:2px;background:#eceff3;border-radius:3px;margin-top:10px;overflow:hidden}
+.bar i{display:block;height:100%;background:#c3cad5}
+.c.on .bar i{background:var(--sel)}
+.tick{position:absolute;top:15px;right:14px;width:20px;height:20px;padding:0;border-radius:6px;
+border:1.5px solid #b9c2cf;background:#fff;cursor:pointer}
+.c.on .tick{background:var(--sel);border-color:var(--sel)}
+.c.on .tick:after{content:"";position:absolute;left:6px;top:3px;width:4px;height:8px;
+border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.c.shake{animation:shake .2s}
+@keyframes flash{0%{background:#e9f0ff}100%{background:var(--card)}}
+.c.flash{animation:flash 1.2s}
+.empty{background:var(--card);border:1px dashed var(--line);border-radius:11px;padding:26px 20px;
+text-align:center;color:var(--dim);font-size:13.5px;margin-bottom:26px}
+.empty b{color:var(--ink)}
+.empty .eact{margin-top:10px}
+
+/* ── 决策条与决策视觉 ── */
+.db{display:grid;grid-template-columns:repeat(3,minmax(42px,1fr)) auto;align-items:center;gap:5px;margin-top:auto;padding-top:13px;position:relative}
+.dbb{min-height:32px;font-size:11.5px;font-weight:680;padding:4px 8px;border-radius:8px;border:1px solid var(--line);
+background:#fff;color:#687386;cursor:pointer;line-height:1.4}
+.dbb:hover{border-color:#aebee5;color:var(--ink);background:#fafbfc}
+.dbb.k.on{background:var(--green);border-color:var(--green);color:#fff;font-weight:600}
+.dbb.d.on{background:#57534e;border-color:#57534e;color:#fff;font-weight:600}
+.dbb.m.on{background:var(--merge);border-color:var(--merge);color:#fff;font-weight:600}
+.dbb.m:disabled{opacity:.4;cursor:not-allowed}
+.dstat{overflow:hidden;max-width:110px;color:var(--dim);font-size:10px;text-overflow:ellipsis;white-space:nowrap}
+.dstat.k{color:var(--green);font-weight:600}
+.dstat.d{color:var(--dim)}
+.dstat.m{color:var(--merge);font-weight:600;cursor:pointer}
+.dstat.m:hover{text-decoration:underline}
+/* 并 · 目标下拉 */
+.mpop{position:absolute;left:0;bottom:calc(100% + 6px);z-index:30;background:#fff;
+border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px rgba(28,25,23,.16);
+width:280px;max-width:calc(100vw - 80px);padding:8px}
+.mpop input{width:100%;font:inherit;font-size:12.5px;padding:5px 9px;border-radius:7px;
+border:1px solid var(--line);outline:none;margin-bottom:6px}
+.mpop .mlist{max-height:210px;overflow:auto}
+.mopt{padding:6px 8px;border-radius:7px;font-size:12.5px;cursor:pointer;line-height:1.4}
+.mopt:hover{background:var(--merge-bg)}
+.mopt .mn{font-weight:600}
+.mopt .me{font:10.5px ui-monospace,Menlo,monospace;color:var(--dim)}
+.mopt .mc{color:var(--dim);font-size:10.5px}
+.mnone{color:var(--dim);font-size:12px;padding:6px 8px}
+/* 决策四态卡片视觉 */
+.c.v-keep{border-color:#a9ddcc;background:#fbfffd}
+.c.v-drop{border-color:#dfe3e8;background:#fafbfc}
+.c.v-drop .nm{color:var(--dim);text-decoration:line-through}
+.c.v-merge{border-color:#c7bdf1;background:#fcfbff}
+.detb{font-size:11px;font-weight:680;color:var(--sel);background:none;border:none;cursor:pointer;padding:2px 0;
+font-family:inherit;text-underline-offset:3px}
+.detb:hover{text-decoration:underline}
+.card-detail{margin-top:8px;text-align:right}
+
+/* ── 底栏 ── */
+#bar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.97);
+border-top:1px solid var(--line);padding:13px 24px;display:none;
+backdrop-filter:blur(8px);z-index:50}
+#bar.show{display:block}
+#bar .in{max-width:1440px;margin:0 auto;display:flex;align-items:center;gap:10px}
+#fbarmsg{color:var(--amber);font-size:12.5px;display:none}
+button{font:inherit;font-size:13.5px;padding:7px 16px;border-radius:8px;border:1px solid var(--line);
+background:#fff;cursor:pointer}
+button.pri{background:var(--ink);color:#fff;border-color:var(--ink)}
+.bb{font-size:12.5px;padding:5px 13px}
+.bb.k:hover{border-color:var(--green);color:var(--green)}
+.bb.d:hover{border-color:#57534e;color:#57534e}
+
+/* ── 对比面板 ── */
+#panel{position:fixed;inset:0;background:rgba(28,25,23,.45);display:none;z-index:60;
+overflow:auto;padding:40px 20px}
+#panel.show{display:block}
+.sheet{max-width:1080px;margin:0 auto;background:var(--bg);border-radius:14px;padding:28px 30px 40px}
+.sheet h2{margin:0 0 20px;font-size:19px}
+.cmp{display:grid;gap:14px}
+.row{display:grid;gap:10px;align-items:start}
+.rl{font-size:12px;color:var(--dim);font-weight:600;padding-top:7px}
+.cell{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:10px 12px;font-size:13px}
+.cell .h{font-weight:650;font-size:14px}
+.mini{color:var(--dim);font-size:12px}
+.dots{display:flex;gap:4px;flex-wrap:wrap}
+.dot{font-size:11px;padding:2px 8px;border-radius:20px;background:#f2efea;color:var(--dim)}
+.dot.on{background:var(--green-bg);color:var(--green);font-weight:600}
+
+/* ── 详情抽屉 ── */
+#drawer{position:fixed;top:0;right:0;bottom:0;width:480px;max-width:92vw;background:var(--bg);
+border-left:1px solid var(--line);box-shadow:-16px 0 40px rgba(28,25,23,.16);z-index:70;
+transform:translateX(105%);transition:transform .2s ease-out;overflow-y:auto;padding:26px 26px 60px}
+#drawer.show{transform:translateX(0)}
+#dmask{position:fixed;inset:0;background:rgba(28,25,23,.35);z-index:65;display:none}
+#dmask.show{display:block}
+.dx{position:absolute;top:14px;right:16px;border:none;background:none;font-size:20px;
+color:var(--dim);cursor:pointer;padding:4px 8px}
+.dsec{margin-top:22px}
+.dsec .dl{font-size:12px;color:var(--dim);font-weight:600;margin-bottom:8px;
+border-bottom:1px solid var(--line);padding-bottom:5px}
+#dttl{font-size:19px;font-weight:650;padding-right:30px;line-height:1.35}
+.dvbtns{display:flex;gap:8px}
+.dvb{flex:1;font-size:14px;padding:9px 0;border-radius:9px;border:1px solid var(--line);
+background:#fff;cursor:pointer;color:var(--dim)}
+.dvb.k.on{background:var(--green);border-color:var(--green);color:#fff;font-weight:600}
+.dvb.d.on{background:#57534e;border-color:#57534e;color:#fff;font-weight:600}
+.dvb.m.on{background:var(--merge);border-color:var(--merge);color:#fff;font-weight:600}
+#dnote{width:100%;font:inherit;font-size:13px;line-height:1.55;border:1px solid var(--line);
+border-radius:9px;padding:9px 11px;margin-top:10px;resize:vertical;min-height:64px;background:#fff;outline:none}
+#dnote:focus{border-color:var(--sel)}
+.kv{font-size:13px;line-height:1.9}
+.kv b{color:var(--dim);font-weight:600;font-size:12px;display:inline-block;min-width:64px}
+.kv code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:#f4f2ef;
+padding:1px 6px;border-radius:4px;word-break:break-all}
+.lk{color:var(--sel);cursor:pointer}
+.lk:hover{text-decoration:underline}
+footer{margin-top:40px;color:var(--dim);font-size:12px;border-top:1px solid var(--line);padding-top:16px}
+/* ── 散装文档 / clone 仓库（不参与决策/筛选/对比/导出）── */
+#extra{margin-top:34px}
+#extra details{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:0}
+#extra summary{cursor:pointer;padding:13px 18px;font-size:14px;font-weight:600;user-select:none;outline:none}
+#extra summary::-webkit-details-marker{display:none}
+#extra summary:before{content:"▸ ";color:var(--dim)}
+#extra details[open] summary:before{content:"▾ "}
+#extra .xbody{padding:0 18px 16px}
+#extra .xnote{color:var(--dim);font-size:12.5px;margin:2px 0 10px;line-height:1.5}
+#extra .xsec{font-size:12px;color:var(--dim);font-weight:600;margin:12px 0 6px}
+.xrow{padding:7px 0;border-top:1px solid #f0ede8;font-size:13px;line-height:1.45}
+.xrow .xn{font-weight:600}
+.xrow .xb{color:var(--dim);font-size:11.5px;margin-left:8px}
+.xrow .xs{font:11px ui-monospace,Menlo,monospace;color:var(--dim);word-break:break-all}
+.xrow .xh{color:var(--dim);font-size:11.5px}
+/* ── 冲突徽标与面板 ── */
+#cfbtn{display:none;font:inherit;font-size:13px;padding:7px 12px;border-radius:8px;
+border:1px solid #f3c2c2;background:var(--danger-bg);color:var(--danger);cursor:pointer;font-weight:600}
+#cfbtn.show{display:block}
+#cfwrap{position:relative}
+#cfpanel{position:absolute;top:calc(100% + 6px);right:0;z-index:46;background:#fff;
+border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(28,25,23,.14);
+padding:12px 14px;width:480px;max-width:calc(100vw - 60px);display:none;max-height:60vh;overflow:auto}
+#cfwrap.show #cfpanel{display:block}
+.cfi{padding:8px 10px;border-radius:8px;font-size:12.5px;line-height:1.5;margin-bottom:4px;cursor:pointer}
+.cfi:hover{background:#f7f5f2}
+.cfi.err{background:var(--danger-bg);color:var(--danger);border:1px solid #efc2c0}
+.cfi.warn{background:var(--amber-bg);color:#7c4a06;border:1px solid #ecd09c}
+.cfi .lk{color:inherit;text-decoration:underline}
+.cfact{margin:6px 4px 2px;text-align:right}
+.gwarn{font-size:11px;padding:2px 9px;border-radius:20px;background:var(--amber-bg);color:var(--amber);
+border:1px solid #f0dcb4;font-weight:600}
+/* ── 推测标签覆盖态（实线 + ✓）── */
+.t.g.ov{background:#eef2f7;color:#3d5a99;border:1px solid #b9c6e2;cursor:help}
+/* ── 抽屉中文审校与推测编辑 ── */
+.zhed{width:100%;font:inherit;font-size:13.5px;line-height:1.55;border:1px solid var(--line);
+border-radius:9px;padding:8px 11px;background:#fff;outline:none;resize:vertical}
+.zhed:focus{border-color:var(--sel)}
+.zhed.nm{font-weight:600;font-size:15px}
+.zhstat{font-size:11.5px;margin-top:5px}
+.zhstat.ok{color:var(--green);font-weight:600}
+.zhstat.dirty{color:var(--amber)}
+.gedit{display:flex;gap:5px;flex-wrap:wrap;margin:3px 0 7px}
+.gt{font-size:11px;padding:2px 9px;border-radius:20px;border:1px dashed #b9c2cf;background:#fafbfc;
+color:var(--dim);cursor:pointer;user-select:none}
+.gt.on{border-style:solid;border-color:#b9c6e2;background:#eef2f7;color:#3d5a99;font-weight:600}
+.greset{font-size:11px;color:var(--sel);cursor:pointer;background:none;border:none;padding:0;font-family:inherit}
+.greset:hover{text-decoration:underline}
+/* ── 键盘焦点 ── */
+.c:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
+.c.kfocus{outline:2px solid var(--sel);outline-offset:2px}
+#help{position:fixed;inset:0;background:rgba(28,25,23,.45);display:none;z-index:80;
+overflow:auto;padding:60px 20px}
+#help.show{display:block}
+#help .hsheet{max-width:420px;margin:0 auto;background:var(--bg);border-radius:14px;padding:24px 28px}
+#help table{width:100%;font-size:13px;border-collapse:collapse}
+#help td{padding:5px 0;border-bottom:1px solid var(--line)}
+#help td:first-child{font-family:ui-monospace,Menlo,monospace;font-weight:600;width:88px;color:var(--sel)}
+#help td:last-child{color:var(--dim)}
+@media (max-width:1100px){
+  .srch{max-width:none}
+  .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .c{min-height:310px}
+}
+@media (max-width:720px){
+  body.embedded{padding:0 1px 100px}
+  body.embedded #top{top:0;margin-bottom:14px;padding:9px;border-radius:11px;box-shadow:0 5px 16px rgba(33,49,76,.05)}
+  #top .r1{gap:7px}
+  .srch{flex:1 0 100%;min-width:0;max-width:none}
+  .fbtn,.srt,.tbtn{min-height:36px;padding:6px 9px}
+  .srt{min-width:0;flex:1}
+  #prog{min-width:96px}
+  #matchinfo{width:100%;white-space:normal}
+  #fpanel .pop{position:fixed;top:64px;right:12px;left:12px;width:auto;max-width:none;max-height:calc(100vh - 82px);overflow:auto}
+  .hint{margin-bottom:22px;padding:11px 12px}
+  .hint-copy{line-height:1.6}
+  .grp{margin-bottom:34px;scroll-margin-top:130px}
+  .gh{align-items:flex-start;gap:6px 8px;min-height:42px;padding:8px 10px}
+  .group-title{font-size:16px}
+  .gprog{width:100%;margin-left:0}
+  .gd{margin-bottom:11px}
+  .cards{grid-template-columns:1fr;gap:10px}
+  .c{min-height:0;padding:15px 14px 12px}
+  .c .ds{-webkit-line-clamp:3}
+  .db{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .dstat{grid-column:1 / -1;justify-self:end;max-width:none}
+  #bar{padding:9px 12px}
+  #bar .in{flex-wrap:wrap;gap:7px}
+  #cnt{width:100%}
+  #fbarmsg{width:100%}
+  .sheet{padding:22px 16px 32px}
+  #drawer{width:100vw;max-width:100vw;padding:22px 18px 54px}
+  #help{padding:30px 12px}
+  #help .hsheet{padding:20px}
+}
+@media (prefers-reduced-motion:reduce){.c{transition:none}.c.shake,.c.flash{animation:none}
+#drawer{transition:none}}
+</style></head><body>
+<div id="top"><div class="in">
+  <div class="r1">
+    <span class="tt">技能能力工作台</span>
+    <div class="srch" id="srchbox">
+      <input id="q" type="text" placeholder="搜索技能名、简介…" autocomplete="off">
+      <button class="x" id="qx" title="清除搜索（Esc）" aria-label="清除搜索">×</button>
+    </div>
+    <div id="fpanel">
+      <button class="fbtn" id="fbtn" aria-expanded="false" aria-controls="fpop">筛选</button>
+      <div class="pop" id="fpop"></div>
+    </div>
+    <select class="srt" id="srt" title="组内排序">
+      <option value="chars">篇幅（默认，降序）</option>
+      <option value="files">包体文件数</option>
+      <option value="zh">中文名 A→Z</option>
+      <option value="copies">副本数</option>
+      <option value="dec">决策状态</option>
+    </select>
+    <button id="prog" type="button" title="点击只看还没定的" aria-pressed="false"><span class="pt" id="progt"></span><span class="pb"><i id="progb"></i></span></button>
+    <div id="cfwrap"><button id="cfbtn"></button><div id="cfpanel"></div></div>
+    <button class="tbtn" id="imp" title="导入之前导出的 decisions.json">导入</button>
+    <button class="tbtn" id="exp" title="导出 decisions.json + 技能清理清单.md">导出<span class="dotw"></span></button>
+    <span id="matchinfo"></span>
+  </div>
+  <div id="chips"></div>
+</div></div>
+<div class="wrap">
+<div id="boot"></div>
+<div class="hint" id="hint"></div>
+<div id="groups"></div>
+<div class="empty" id="empty" style="display:none"></div>
+<div id="extra"></div>
+<footer>数据由 workbench.py 只读生成，不解压、不修改收藏夹。
+重跑：<code>python3 workbench.py</code>（本页手写，重跑不会覆盖）· 决策只存浏览器 localStorage，
+点「导出」拿 <code>decisions.json</code> 和清理清单，照清单自己动手。</footer>
+</div>
+<div id="bar"><div class="in"><span id="cnt"></span>
+<span id="fbarmsg">一次最多比 4 个，先去掉一个再选</span>
+<button class="bb k" id="bk">标留</button>
+<button class="bb d" id="bd">标砍</button>
+<button class="pri" onclick="compare()">并排对比</button>
+<button onclick="clearAll()">清空</button></div></div>
+<div id="panel" role="dialog" aria-modal="true" aria-label="技能并排对比" onclick="if(event.target.id==='panel')closePanel()"></div>
+<div id="dmask"></div>
+<aside id="drawer" role="dialog" aria-modal="true" aria-labelledby="dttl"></aside>
+<div id="help" role="dialog" aria-modal="true" aria-label="键盘快捷键" onclick="if(event.target.id==='help')closeHelp()"><div class="hsheet">
+<h2 style="margin:0 0 14px;font-size:17px">键盘快捷键</h2>
+<table>
+<tr><td>/</td><td>聚焦搜索框</td></tr>
+<tr><td>Esc</td><td>依次关闭：对比 → 抽屉 → 筛选 → 清空搜索</td></tr>
+<tr><td>↑ ↓ ← →</td><td>在卡片网格中移动焦点</td></tr>
+<tr><td>Space</td><td>勾选/取消当前卡片（用于对比）</td></tr>
+<tr><td>Enter</td><td>打开当前卡片详情</td></tr>
+<tr><td>K / D / M</td><td>对当前卡片标 留 / 砍 / 并</td></tr>
+<tr><td>C</td><td>对已勾选项打开对比</td></tr>
+<tr><td>?</td><td>显示/关闭本帮助</td></tr>
+</table>
+<div style="margin-top:16px;text-align:right"><button onclick="closeHelp()">关掉</button></div>
+</div></div>
+<input type="file" id="impfile" accept="application/json,.json" style="display:none">
+<script src="data.js"></script>
+<script src="decisions.js"></script>
+<script>
+'use strict';
+// 在 iframe 里（被 AI-Toolbox 嵌入）时隐藏自身顶栏，避免和宿主标题/搜索重复
+if(window.self !== window.top){ document.body.classList.add('embedded'); }
+const M = window.__WORKBENCH_DATA__ || null;
+const D = M ? M.items : [];
+const FORBIDDEN_KEYS = new Set(['__proto__','constructor','prototype']);
+const UID_RE = /^[a-f0-9]{32}$/;
+const BY = Object.create(null);
+for(const x of D){
+  if(x && typeof x.uid==='string' && UID_RE.test(x.uid) && !FORBIDDEN_KEYS.has(x.uid)) BY[x.uid]=x;
+}
+const sel = new Set();
+const expanded = new Set();
+const BUCKETS = ["训练与测试","知识库","范例库","模板","参考资料","素材","脚本"];
+const ZH_LABEL = {missing:'待补中文', stale:'中文已过期', ai_draft:'中文草稿', reviewed:'中文已确认'};
+const V_LABEL = {keep:'✓ 留', drop:'✗ 砍', merge:'并', pending:'待定'};
+const V_ORDER = {pending:0, keep:1, merge:2, drop:3};
+const FSEC = [['platform','平台'],['inputs','输入'],['outputs','输出'],['zh_state','中文状态'],['has','特征']];
+const GUESS_TIP = '关键词推测，可能不准';
+const LS_KEY = 'skill-workbench:decisions:v1';
+const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
+const MAX_DECISIONS = 5000;
+const MAX_NOTE_CHARS = 4000;
+const MAX_NAME_CHARS = 256;
+const MAX_PATH_CHARS = 2048;
+const MAX_SUMMARY_CHARS = 8000;
+const MAX_FACET_VALUES = 32;
+const MAX_FACET_CHARS = 128;
+const maxc = D.length ? Math.max(...D.map(x=>x.chars)) : 0;
+
+const state = { q:'', sort:'chars', onlyPending:false,
+  f:{platform:new Set(), inputs:new Set(), outputs:new Set(), zh_state:new Set(), has:new Set()} };
+
+// ═══ 决策存储（localStorage 自动存 + 手动导出，两条腿）═══
+const decisions = Object.create(null); // uid -> {verdict, merge_into, note, decided_at, anchor}
+const overrides = Object.create(null); // uid -> {...}（第 4 步用，先占位持久化结构）
+let importedFile = null;         // 从文件合并进来的快照，用于"未导出"计数
+let drawerUid = null;
+
+function nowISO(){ return new Date().toISOString(); }
+function verdictOf(uid){ const d = decisions[uid]; return d ? d.verdict : 'pending'; }
+// overrides 优先的读取（第 4 步：中文审校 + 推测字段覆盖）
+function ov(uid){ return Object.hasOwn(overrides,uid) ? overrides[uid] : {}; }
+function titleOv(x){ return ov(x.uid).zh_name || x.zh_name || x.name; }
+function sumOv(x){ const o=ov(x.uid); return o.zh_sum!=null ? o.zh_sum : x.zh_sum; }
+function platformOv(x){ const o=ov(x.uid); return o.platform!=null ? o.platform : x.platform; }
+function inputsOv(x){ const o=ov(x.uid); return o.inputs!=null ? o.inputs : x.inputs; }
+function outputsOv(x){ const o=ov(x.uid); return o.outputs!=null ? o.outputs : x.outputs; }
+function zhStateOv(x){ const o=ov(x.uid); return o.zh_reviewed ? 'reviewed' : x.zh_state; }
+function isOv(x,f){ return ov(x.uid)[f]!=null; }
+function saveLS(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify({
+    schema_version:1, updated_at:nowISO(), decisions, overrides })); }catch(_){}
+  updateExpBadge();
+}
+
+function isPlainRecord(value){
+  if(value===null || typeof value!=='object' || Array.isArray(value)) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto===Object.prototype || proto===null;
+}
+function assertRecord(value, label){
+  if(!isPlainRecord(value)) throw new Error(`${label} 必须是普通对象`);
+  for(const key of Object.keys(value)){
+    if(FORBIDDEN_KEYS.has(key)) throw new Error(`${label} 含禁止键 ${key}`);
+  }
+}
+function assertExactKeys(value, allowed, label){
+  assertRecord(value,label);
+  for(const key of Object.keys(value)){
+    if(!allowed.has(key)) throw new Error(`${label} 含未知字段 ${key}`);
+  }
+}
+function boundedString(value, label, max, {allowEmpty=true}={}){
+  if(typeof value!=='string') throw new Error(`${label} 必须是字符串`);
+  if(!allowEmpty && !value) throw new Error(`${label} 不能为空`);
+  if(value.length>max) throw new Error(`${label} 超过 ${max} 字符`);
+  return value;
+}
+function isoString(value, label){
+  const raw = boundedString(value,label,64,{allowEmpty:false});
+  const millis = Date.parse(raw);
+  if(!Number.isFinite(millis)) throw new Error(`${label} 不是有效 ISO 时间`);
+  return new Date(millis).toISOString();
+}
+function validateUid(uid, label, allowUnknownUid){
+  if(typeof uid!=='string' || !UID_RE.test(uid) || FORBIDDEN_KEYS.has(uid))
+    throw new Error(`${label} 不是合法 UID`);
+  if(!allowUnknownUid && !Object.hasOwn(BY,uid)) throw new Error(`${label} 不在当前数据中`);
+  return uid;
+}
+function copyNullMap(source){
+  const out = Object.create(null);
+  for(const [key,value] of Object.entries(source)) out[key]=value;
+  return out;
+}
+function replaceNullMap(target, source){
+  for(const key of Object.keys(target)) delete target[key];
+  for(const [key,value] of Object.entries(source)) target[key]=value;
+}
+function normalizeFacetList(value, label, field){
+  if(value===null) return null;
+  if(!Array.isArray(value) || value.length>MAX_FACET_VALUES)
+    throw new Error(`${label} 必须是最多 ${MAX_FACET_VALUES} 项的数组或 null`);
+  const allowed = new Set(((M.facets&&M.facets[field])||[]).map(x=>x.value));
+  const result = [];
+  for(const item of value){
+    const clean = boundedString(item,`${label}[]`,MAX_FACET_CHARS,{allowEmpty:false});
+    if(!allowed.has(clean)) throw new Error(`${label} 含未知值`);
+    if(!result.includes(clean)) result.push(clean);
+  }
+  return result;
+}
+function validateDecisionGraph(map, {allowUnknownUid=false}={}){
+  for(const [uid,decision] of Object.entries(map)){
+    if(decision.verdict!=='merge') continue;
+    const target = decision.merge_into;
+    if(!allowUnknownUid && !Object.hasOwn(BY,target)) throw new Error(`decisions.${uid}.merge_into 不存在`);
+    if(Object.hasOwn(BY,uid) && Object.hasOwn(BY,target) && BY[uid].group!==BY[target].group)
+      throw new Error(`decisions.${uid}.merge_into 不在同一能力组`);
+    if(Object.hasOwn(map,target) && map[target].verdict==='drop')
+      throw new Error(`decisions.${uid}.merge_into 指向了已淘汰项`);
+    const seen = new Set([uid]);
+    let cursor = target;
+    while(cursor && Object.hasOwn(map,cursor) && map[cursor].verdict==='merge'){
+      if(seen.has(cursor)) throw new Error(`decisions.${uid} 的合并链成环`);
+      seen.add(cursor);
+      cursor = map[cursor].merge_into;
+    }
+    if(cursor && seen.has(cursor)) throw new Error(`decisions.${uid} 的合并链成环`);
+  }
+}
+function normalizeDecisionPayload(raw, {allowUnknownUid=false}={}){
+  const topKeys = new Set(['schema_version','updated_at','decisions','overrides']);
+  assertExactKeys(raw,topKeys,'payload');
+  if(raw.schema_version!==1) throw new Error('schema_version 必须为 1');
+  const updatedAt = isoString(raw.updated_at,'updated_at');
+  assertRecord(raw.decisions,'decisions');
+  assertRecord(raw.overrides,'overrides');
+  if(Object.keys(raw.decisions).length>MAX_DECISIONS) throw new Error(`decisions 超过 ${MAX_DECISIONS} 条`);
+  if(Object.keys(raw.overrides).length>MAX_DECISIONS) throw new Error(`overrides 超过 ${MAX_DECISIONS} 条`);
+
+  const cleanDecisions = Object.create(null);
+  const decisionKeys = new Set(['verdict','merge_into','note','decided_at','anchor']);
+  const anchorKeys = new Set(['name','src']);
+  for(const [rawUid,value] of Object.entries(raw.decisions)){
+    const uid = validateUid(rawUid,`decisions.${rawUid}`,allowUnknownUid);
+    assertExactKeys(value,decisionKeys,`decisions.${uid}`);
+    if(!['keep','drop','merge','pending'].includes(value.verdict))
+      throw new Error(`decisions.${uid}.verdict 不合法`);
+    const mergeInto = value.merge_into;
+    if(value.verdict==='merge'){
+      validateUid(mergeInto,`decisions.${uid}.merge_into`,allowUnknownUid);
+      if(mergeInto===uid) throw new Error(`decisions.${uid}.merge_into 不能指向自己`);
+      if(Object.hasOwn(BY,uid) && Object.hasOwn(BY,mergeInto) && BY[uid].group!==BY[mergeInto].group)
+        throw new Error(`decisions.${uid}.merge_into 不在同一能力组`);
+    }else if(mergeInto!==null){
+      throw new Error(`decisions.${uid}.merge_into 在非 merge 状态必须为 null`);
+    }
+    assertExactKeys(value.anchor,anchorKeys,`decisions.${uid}.anchor`);
+    cleanDecisions[uid] = {
+      verdict:value.verdict,
+      merge_into:value.verdict==='merge'?mergeInto:null,
+      note:boundedString(value.note,`decisions.${uid}.note`,MAX_NOTE_CHARS),
+      decided_at:isoString(value.decided_at,`decisions.${uid}.decided_at`),
+      anchor:{
+        name:boundedString(value.anchor.name,`decisions.${uid}.anchor.name`,MAX_NAME_CHARS,{allowEmpty:false}),
+        src:boundedString(value.anchor.src,`decisions.${uid}.anchor.src`,MAX_PATH_CHARS,{allowEmpty:false}),
+      },
+    };
+  }
+
+  const cleanOverrides = Object.create(null);
+  const overrideKeys = new Set(['platform','inputs','outputs','zh_name','zh_sum','zh_reviewed']);
+  for(const [rawUid,value] of Object.entries(raw.overrides)){
+    const uid = validateUid(rawUid,`overrides.${rawUid}`,allowUnknownUid);
+    assertExactKeys(value,overrideKeys,`overrides.${uid}`);
+    const clean = Object.create(null);
+    for(const field of ['platform','inputs','outputs']){
+      if(Object.hasOwn(value,field)){
+        const list = normalizeFacetList(value[field],`overrides.${uid}.${field}`,field);
+        if(list!==null) clean[field]=list;
+      }
+    }
+    if(Object.hasOwn(value,'zh_name') && value.zh_name!==null)
+      clean.zh_name=boundedString(value.zh_name,`overrides.${uid}.zh_name`,MAX_NAME_CHARS);
+    if(Object.hasOwn(value,'zh_sum') && value.zh_sum!==null)
+      clean.zh_sum=boundedString(value.zh_sum,`overrides.${uid}.zh_sum`,MAX_SUMMARY_CHARS);
+    if(Object.hasOwn(value,'zh_reviewed')){
+      if(typeof value.zh_reviewed!=='boolean') throw new Error(`overrides.${uid}.zh_reviewed 必须是布尔值`);
+      clean.zh_reviewed=value.zh_reviewed;
+    }
+    cleanOverrides[uid]=clean;
+  }
+  validateDecisionGraph(cleanDecisions,{allowUnknownUid});
+  return {schema_version:1,updated_at:updatedAt,decisions:cleanDecisions,overrides:cleanOverrides};
+}
+function loadLS(){
+  try{
+    const raw = localStorage.getItem(LS_KEY);
+    if(!raw) return;
+    const clean = normalizeDecisionPayload(JSON.parse(raw),{allowUnknownUid:true});
+    replaceNullMap(decisions,clean.decisions);
+    replaceNullMap(overrides,clean.overrides);
+  }catch(error){ console.warn('已忽略无效的本地决策数据：',error.message); }
+}
+// 与文件逐条合并：按 decided_at 取新的；返回合并进来的条数
+function mergeFile(j, {allowUnknownUid=false}={}){
+  const clean = normalizeDecisionPayload(j,{allowUnknownUid});
+  const nextDecisions = copyNullMap(decisions);
+  const nextOverrides = copyNullMap(overrides);
+  let n = 0;
+  for(const [uid,fileDecision] of Object.entries(clean.decisions)){
+    const cur = nextDecisions[uid];
+    if(!cur || fileDecision.decided_at > cur.decided_at){ nextDecisions[uid]=fileDecision; n++; }
+  }
+  for(const [uid,fileOverride] of Object.entries(clean.overrides)){
+    if(!Object.hasOwn(nextOverrides,uid)) nextOverrides[uid]=fileOverride;
+  }
+  // 现有本地孤儿可继续显示 C7 提醒；新导入的 UID/合并目标已在上面严格校验。
+  validateDecisionGraph(nextDecisions,{allowUnknownUid:true});
+  replaceNullMap(decisions,nextDecisions);
+  replaceNullMap(overrides,nextOverrides);
+  importedFile = clean;
+  return n;
+}
+// 未导出计数：localStorage 里比"已导入文件"新的/多的决策条数
+function unsavedCount(){
+  const ref = importedFile ? importedFile.decisions : {};
+  let n = 0;
+  for(const [uid,dd] of Object.entries(decisions)){
+    const rd = ref[uid];
+    if(!rd || dd.verdict!==rd.verdict || dd.merge_into!==rd.merge_into || (dd.note||'')!==(rd.note||'')) n++;
+  }
+  return n;
+}
+function updateExpBadge(){
+  document.getElementById('exp').classList.toggle('unsaved', unsavedCount()>0);
+  const n = unsavedCount();
+  document.getElementById('exp').title = n ? `有 ${n} 条决策尚未导出` : '导出 decisions.json + 技能清理清单.md';
+}
+
+// ═══ 决策操作 ═══
+function setVerdict(uid, v, mergeInto){
+  if(!Object.hasOwn(BY,uid) || !['pending','keep','drop','merge'].includes(v)) return;
+  if(v==='merge' && mergeInto!=null && (!Object.hasOwn(BY,mergeInto) || mergeInto===uid || BY[mergeInto].group!==BY[uid].group)) return;
+  const cur = decisions[uid];
+  if(v==='pending'){ delete decisions[uid]; }
+  else if(cur && cur.verdict===v && v!=='merge' && !mergeInto){ delete decisions[uid]; } // 再点取消
+  else{
+    const x = BY[uid];
+    decisions[uid] = { verdict:v, merge_into: v==='merge'?(mergeInto||null):null,
+      note: cur?cur.note||'':'', decided_at: nowISO(),
+      anchor:{name:x.name, src:x.src} };
+  }
+  saveLS(); refreshDecisions();
+}
+function setNote(uid, text){
+  if(!Object.hasOwn(BY,uid)) return;
+  text=String(text).slice(0,MAX_NOTE_CHARS);
+  const x = BY[uid];
+  const cur = decisions[uid];
+  decisions[uid] = { verdict: cur?cur.verdict:'pending',
+    merge_into: cur?cur.merge_into:null, note:text,
+    decided_at: cur?cur.decided_at:nowISO(), anchor:{name:x.name, src:x.src} };
+  if(!text && decisions[uid].verdict==='pending') delete decisions[uid];  // 空备注+待定 = 不落
+  saveLS(); updateExpBadge();
+}
+function sameGroup(uid){ const g = BY[uid].group; return D.filter(x=>x.group===g && x.uid!==uid); }
+function validMergeTargets(uid){ return sameGroup(uid); }
+
+// ═══ 冲突检测 C1-C7：每次决策变更后重算。C1-C4 错误(红)，C5-C7 提醒(琥珀)。徽标只计错误级。═══
+function detectConflicts(){
+  const errs = [], warns = [];
+  // C1 已装但标砍
+  for(const x of D){
+    if(x.installed.hosts.length && verdictOf(x.uid)==='drop')
+      errs.push({uid:x.uid, msg:`「${title(x)}」已装在 ${x.installed.hosts.join('、')}，但你标了淘汰 —— 记得去宿主目录删掉`});
+  }
+  // C2 并入目标被砍 / C4 并入目标不存在 / C3 成环
+  for(const [uid,dd] of Object.entries(decisions)){
+    if(dd.verdict!=='merge') continue;
+    const x = BY[uid];
+    if(!x) continue;
+    const t = dd.merge_into;
+    if(t && !BY[t])
+      errs.push({uid, msg:`「${title(x)}」的合并目标已不存在（可能收藏夹变了），请重选`});
+    else if(t && verdictOf(t)==='drop')
+      errs.push({uid, msg:`「${title(x)}」要并入「${title(BY[t])}」，但后者被标了淘汰`});
+    // 成环（含多跳）
+    let cur = t, hops = 0, cyc = false;
+    const seen = new Set([uid]);
+    while(cur && hops < 60){
+      if(seen.has(cur)){ cyc = true; break; }
+      seen.add(cur);
+      const cd = decisions[cur];
+      cur = (cd && cd.verdict==='merge') ? cd.merge_into : null;
+      hops++;
+    }
+    if(cyc) errs.push({uid, msg:`「${title(x)}」的合并链成环了（A→B→A），得挑一个当主`});
+  }
+  // C5 竞争组全留 / C6 竞争组全砍
+  for(const g of M.groups){
+    if(!g.competing) continue;
+    const mem = D.filter(x=>x.group===g.name);
+    if(mem.length < 2) continue;
+    const vs = mem.map(x=>verdictOf(x.uid));
+    if(vs.every(v=>v==='keep'))
+      warns.push({uid:mem[0].uid, msg:`「${g.name}」${mem.length} 个全留了 —— 这组本来是直接竞争关系，确认一下？`});
+    else if(vs.every(v=>v==='drop'))
+      warns.push({uid:mem[0].uid, msg:`「${g.name}」一个没留`});
+  }
+  // C7 decisions 里有 data.json 已不存在的 uid
+  const orphans = Object.entries(decisions).filter(([uid])=>!BY[uid]);
+  if(orphans.length)
+    warns.push({orphan:true, list:orphans.map(([u,dd])=>(dd.anchor&&dd.anchor.name)||u),
+      msg:`有 ${orphans.length} 条决策找不到对应技能了（${orphans.slice(0,3).map(([u,dd])=>(dd.anchor&&dd.anchor.name)||'?').join('、')}${orphans.length>3?' 等':''}）`});
+  return {errs, warns};
+}
+function renderConflicts(){
+  const {errs, warns} = detectConflicts();
+  const btn = document.getElementById('cfbtn');
+  const wrap = document.getElementById('cfwrap');
+  const panel = document.getElementById('cfpanel');
+  if(!errs.length && !warns.length){ btn.className=''; wrap.classList.remove('show'); return; }
+  btn.className = 'show';
+  btn.textContent = errs.length ? `冲突 ${errs.length}` : `提醒 ${warns.length}`;
+  btn.style.cssText = errs.length ? '' : 'border-color:#f0dcb4;background:var(--amber-bg);color:var(--amber)';
+  panel.innerHTML =
+    errs.map((c,i)=>`<div class="cfi err" data-uid="${esc(c.uid||'')}">${esc(c.msg)}</div>`).join('')
+    + warns.map(c=> c.orphan
+        ? `<div class="cfi warn" style="cursor:default">${esc(c.msg)}
+            <div class="cfact"><button class="greset" id="cforph">清除失效决策</button></div></div>`
+        : `<div class="cfi warn" data-uid="${esc(c.uid||'')}">${esc(c.msg)}</div>`).join('');
+  panel.querySelectorAll('.cfi[data-uid]').forEach(el=>el.onclick=()=>{
+    if(el.dataset.uid) gotoCard(el.dataset.uid);
+    wrap.classList.remove('show');
+  });
+  const co = document.getElementById('cforph');
+  if(co) co.onclick = e=>{
+    e.stopPropagation();
+    Object.keys(decisions).forEach(u=>{ if(!BY[u]) delete decisions[u]; });
+    saveLS(); refreshDecisions();
+  };
+  // C6 组标题旁琥珀提示
+  document.querySelectorAll('#groups .grp').forEach(gr=>{
+    const name = gr.dataset.grp;
+    const g = M.groups.find(x=>x.name===name);
+    const old = gr.querySelector('.gwarn'); if(old) old.remove();
+    if(g && g.competing){
+      const mem = D.filter(x=>x.group===name);
+      if(mem.length>=2 && mem.every(x=>verdictOf(x.uid)==='drop'))
+        gr.querySelector('.gh').insertAdjacentHTML('beforeend','<span class="gwarn">这组一个没留</span>');
+    }
+  });
+}
+
+// 决策变更后的全面刷新：卡片类名/状态字、组进度、顶栏进度、抽屉若开着也刷
+function refreshDecisions(){
+  document.querySelectorAll('#groups .c').forEach(el=>{
+    const uid = el.dataset.uid;
+    const v = verdictOf(uid);
+    el.classList.toggle('v-keep', v==='keep');
+    el.classList.toggle('v-drop', v==='drop');
+    el.classList.toggle('v-merge', v==='merge');
+    const db = el.querySelector(':scope > .db');
+    if(db) db.outerHTML = decisionBarHTML(uid);
+  });
+  bindDecisionBars();
+  updateGroupProgress();
+  updateProgress();
+  renderConflicts();
+  if(drawerUid) fillDrawerDecision(drawerUid);
+}
+
+// ═══ 渲染 ═══
+// 同时适用于 HTML 正文与引号属性上下文，防止扫描数据/导入决策逃逸属性。
+function esc(s){
+  return (s==null?'':String(s)).replace(/[&<>"']/g,ch=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  })[ch]);
+}
+function hl(s,q){
+  const e = esc(s);
+  if(!q) return e;
+  const qe = esc(q).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return e.replace(new RegExp('('+qe+')','gi'),'<mark>$1</mark>');
+}
+function title(x){ return titleOv(x) }
+function blurb(x){ const s = sumOv(x); return s || x.desc }
+function blurbFull(x){ const s = sumOv(x); return s || x.desc_full || x.desc }
+function zhTag(x){
+  const zs = zhStateOv(x);
+  const edited = isOv(x,'zh_name') || isOv(x,'zh_sum');
+  if(zs==='missing') return `<span class="t w">待补中文</span>`;
+  if(zs==='stale')   return `<span class="t w">中文已过期</span>`;
+  if(zs==='reviewed')return `<span class="t ok">中文已确认</span>`;
+  if(edited)         return `<span class="t w">已修改，待确认</span>`;
+  return '';
+}
+function stuffHTML(x){
+  const got = BUCKETS.filter(b=>x.shape[b]>0);
+  if(!got.length) return `<span class="s0">仅含 SKILL.md</span>`;
+  return `<span class="s0">随附资源</span>` + got.map(b=>
+    `<span class="s ${b==='训练与测试'?'hi':''}">${b} ${x.shape[b]}</span>`).join('');
+}
+
+function decisionBarHTML(uid){
+  const x = BY[uid];
+  const v = verdictOf(uid);
+  const targets = validMergeTargets(uid);
+  let stat;
+  if(v==='keep') stat = `<span class="dstat k">已留</span>`;
+  else if(v==='drop') stat = `<span class="dstat d">已砍</span>`;
+  else if(v==='merge'){
+    const t = decisions[uid].merge_into && BY[decisions[uid].merge_into];
+    stat = t ? `<span class="dstat m" data-goto="${esc(t.uid)}">→ 并入 ${esc(title(t))}</span>`
+             : `<span class="dstat m">并入（未选目标）</span>`;
+  }
+  else stat = `<span class="dstat">待定</span>`;
+  return `<div class="db">
+    <button class="dbb k ${v==='keep'?'on':''}" data-v="keep" aria-pressed="${v==='keep'}">留</button>
+    <button class="dbb d ${v==='drop'?'on':''}" data-v="drop" aria-pressed="${v==='drop'}">砍</button>
+    <button class="dbb m ${v==='merge'?'on':''}" data-v="merge" aria-pressed="${v==='merge'}"
+      ${targets.length?'':'disabled title="这组没有别的技能可并"'}>并</button>
+    ${stat}</div>`;
+}
+
+function descHTML(x,q){
+  if(x.desc_flags.includes('desc_broken')){
+    const zs = x.zh_sum ? `<div class="ds" style="margin-top:6px">${hl(x.zh_sum,q)}</div>` : '';
+    return `<div class="dsbad">⚠️ 这个包的简介字段是坏的，需要点开原包看正文</div>` + zs;
+  }
+  const full = expanded.has(x.uid);
+  const text = full ? blurbFull(x) : blurb(x);
+  if(!text) return '';
+  const staleNote = x.zh_state==='stale'
+    ? `<div class="s0" style="margin-top:4px">原包内容已变更，这段译文可能过时</div>` : '';
+  const needToggle = blurb(x).length > 80 || x.desc_flags.includes('truncated');
+  return `<div class="ds ${full?'exp':''}">${hl(text,q)}</div>${staleNote}`
+    + (needToggle ? `<span class="xpd" data-xpd="${esc(x.uid)}">${full?'收起':'展开'}</span>` : '');
+}
+function cardHTML(x){
+  const q = state.q;
+  const v = verdictOf(x.uid);
+  const tags = [
+    zhTag(x),
+    platformOv(x).length ? `<span class="gmark" title="${isOv(x,'platform')?'你已修正过这项':GUESS_TIP}">${isOv(x,'platform')?'已校正':'推测'}</span>` : '',
+    ...platformOv(x).map(p=>`<span class="t g ${isOv(x,'platform')?'ov':''}" title="${isOv(x,'platform')?'你已修正过这项':GUESS_TIP}">${esc(p)}</span>`),
+    x.tags.includes('含脚本') ? `<span class="t script">含脚本</span>` : '',
+    x.installed.hosts.length ? `<span class="t inst">已装 · ${esc(x.installed.hosts.map(h=>h[0].toUpperCase()+h.slice(1)).join(' '))}</span>` : '',
+    x.tags.includes('有重复副本') ? `<span class="t cp">${x.copies} 份副本</span>` : '',
+    x.multi ? `<span class="t">同名多版本</span>` : '',
+    x.tags.includes('简介有问题') ? `<span class="t issue">简介有问题</span>` : '',
+  ].join('');
+  return `<div class="c ${sel.has(x.uid)?'on':''} v-${v}" data-uid="${esc(x.uid)}" role="group" tabindex="0"
+    aria-label="${esc(title(x))}，按空格加入对比，按回车查看详情"><button class="tick" type="button"
+    aria-label="${sel.has(x.uid)?'移出':'加入'}对比：${esc(title(x))}" aria-pressed="${sel.has(x.uid)}"></button>
+    <div class="nm">${hl(title(x),q)}</div>
+    <div class="en">${hl(x.name,q)}</div>
+    ${descHTML(x,q)}
+    <div class="tags">${tags}</div>
+    <div class="stuff">${stuffHTML(x)}</div>
+    ${decisionBarHTML(x.uid)}
+    <div class="card-detail"><button class="detb" data-det="${esc(x.uid)}">查看详情 →</button></div>
+    <div class="bar"><i style="width:${Math.round(x.chars/(maxc||1)*100)}%"></i></div></div>`;
+}
+
+function groupProgressHTML(mem){
+  const done = mem.filter(x=>verdictOf(x.uid)!=='pending');
+  if(done.length === mem.length && mem.length) return `<span class="gprog done">✓ 已完成</span>`;
+  if(!done.length) return '';
+  const k = mem.filter(x=>verdictOf(x.uid)==='keep').length;
+  const dr = mem.filter(x=>verdictOf(x.uid)==='drop').length;
+  const mg = mem.filter(x=>verdictOf(x.uid)==='merge').length;
+  let s = `已决策 ${done.length}/${mem.length}`;
+  const parts = [];
+  if(k) parts.push('留'+k); if(dr) parts.push('砍'+dr); if(mg) parts.push('并'+mg);
+  if(parts.length) s += ' · ' + parts.join(' ');
+  return `<span class="gprog">${s}</span>`;
+}
+function updateGroupProgress(){
+  document.querySelectorAll('#groups .grp').forEach(gr=>{
+    const name = gr.dataset.grp;
+    const mem = D.filter(x=>x.group===name);
+    const el = gr.querySelector('.gprog');
+    const h = groupProgressHTML(mem);
+    if(el) el.outerHTML = h || '<span class="gprog" style="display:none"></span>';
+    else if(h) gr.querySelector('.gh').insertAdjacentHTML('beforeend', h);
+  });
+}
+
+function matchQ(x,q){
+  if(!q) return true;
+  const n = q.toLowerCase();
+  return [titleOv(x), x.name, sumOv(x), x.desc, x.desc_full, x.src]
+    .some(v=>v && v.toLowerCase().includes(n));
+}
+function matchF(x){
+  const f = state.f;
+  if(f.platform.size && !platformOv(x).some(v=>f.platform.has(v))) return false;
+  if(f.inputs.size   && !inputsOv(x).some(v=>f.inputs.has(v)))     return false;
+  if(f.outputs.size  && !outputsOv(x).some(v=>f.outputs.has(v)))   return false;
+  if(f.zh_state.size && !f.zh_state.has(zhStateOv(x)))             return false;
+  if(f.has.size      && ![...f.has].some(v=>x.tags.includes(v))) return false;
+  if(state.onlyPending && verdictOf(x.uid)!=='pending')         return false;
+  return true;
+}
+const visible = x => matchQ(x,state.q) && matchF(x);
+
+function sortMem(mem){
+  const k = state.sort;
+  const a = [...mem];
+  if(k==='files')  a.sort((p,q)=>q.shape.total-p.shape.total);
+  else if(k==='zh') a.sort((p,q)=>title(p).localeCompare(title(q),'zh-Hans-CN'));
+  else if(k==='copies') a.sort((p,q)=>q.copies-p.copies);
+  else if(k==='dec') a.sort((p,q)=>V_ORDER[verdictOf(p.uid)]-V_ORDER[verdictOf(q.uid)] || q.chars-p.chars);
+  else a.sort((p,q)=>q.chars-p.chars);
+  return a;
+}
+
+function render(){
+  const host = document.getElementById('groups');
+  let html = M.groups.map(g=>{
+    const mem = D.filter(x=>x.group===g.name);
+    if(!mem.length) return '';
+    return `<div class="grp" data-grp="${esc(g.name)}"><div class="gh"><span class="group-title">${esc(g.name)}</span>
+      <span class="badge ${g.competing?'vs':'co'}">${g.competing?'直接竞争 '+mem.length+' 个':'互补 '+mem.length+' 个'}</span>
+      ${groupProgressHTML(mem)}</div>
+      <div class="gd">${esc(g.desc)}</div>
+      <div class="cards">${sortMem(mem).map(cardHTML).join('')}</div></div>`;
+  }).join('');
+  const rest = D.filter(x=>x.group==='未归类');
+  if(rest.length){
+    html = `<div class="alert">
+      <b>有 ${rest.length} 个新技能还没归类</b> —— 规则按技能名判断，名字里没线索的会落到这里。
+      在 <code>rules.json</code> 的 <code>overrides</code> 里写一行
+      <code>"技能名": "组名"</code> 就能钉死，或者给对应规则补个关键词。看最下面一组。</div>` + html
+      + `<div class="grp" data-grp="未归类"><div class="gh"><span class="group-title">未归类</span>
+      <span class="badge vs">待你处理 ${rest.length} 个</span>${groupProgressHTML(rest)}</div>
+      <div class="cards">${sortMem(rest).map(cardHTML).join('')}</div></div>`;
+  }
+  host.innerHTML = html;
+  host.querySelectorAll('.c').forEach(el=>{
+    el.onclick = ()=>toggle(el.dataset.uid,el);
+    el.ondblclick = e=>{ e.preventDefault(); openDrawer(el.dataset.uid); };
+    const tick = el.querySelector('.tick');
+    if(tick) tick.onclick = e=>{ e.stopPropagation(); toggle(el.dataset.uid,el); };
+  });
+  host.querySelectorAll('.xpd').forEach(el=>el.onclick=e=>{
+    e.stopPropagation();
+    const u = el.dataset.xpd;
+    expanded.has(u) ? expanded.delete(u) : expanded.add(u);
+    render();
+  });
+  host.querySelectorAll('.detb').forEach(el=>el.onclick=e=>{
+    e.stopPropagation(); openDrawer(el.dataset.det);
+  });
+  bindDecisionBars();
+  applyView();
+  updateProgress();
+  renderExtra();
+}
+
+// 散装文档 / clone 仓库：不是技能，不参与决策/筛选/对比/导出。字段缺失或不是数组时整个区块不渲染。
+function renderExtra(){
+  const host = document.getElementById('extra');
+  const loose = Array.isArray(M.loose_docs) ? M.loose_docs : [];
+  const repos = Array.isArray(M.repos)      ? M.repos      : [];
+  if(!loose.length && !repos.length){ host.innerHTML=''; return; }
+  const fmtB = b=> b>=1048576 ? (b/1048576).toFixed(1)+' MB' : b>=1024 ? (b/1024).toFixed(1)+' KB' : b+' B';
+  let h = `<details><summary>收藏夹里还有 ${loose.length} 份散装文档、${repos.length} 个 clone 仓库</summary><div class="xbody">`;
+  if(loose.length){
+    h += `<div class="xsec">散装文档（${loose.length} 份）</div>
+      <div class="xnote">这些是 .md/.txt，没有 SKILL.md 结构，宿主认不出来 —— 想用得先转成 skill 格式。</div>`
+      + loose.map(x=>`<div class="xrow"><span class="xn">${esc(x.name)}</span><span class="xb">${fmtB(x.bytes)}${x.zh?' · 中文':''}</span>
+        ${x.heading && x.heading!==x.name ? `<div class="xh">文内标题：${esc(x.heading)}</div>`:''}
+        <div class="xs">${esc(x.src)}</div></div>`).join('');
+  }
+  if(repos.length){
+    h += `<div class="xsec">clone 来的仓库（${repos.length} 个）</div>
+      <div class="xnote">整个仓库里的示例技能不是给你装的，需要哪个单独拎出来。</div>`
+      + repos.map(x=>`<div class="xrow"><span class="xn">${esc(x.name)}</span><span class="xb">仓库内 ${x.skills_inside} 个示例技能</span>
+        <div class="xs">${esc(x.src)}</div></div>`).join('');
+  }
+  host.innerHTML = h + '</div></details>';
+}
+
+// 决策条事件（事件代理到 document，渲染/重刷都稳）
+function bindDecisionBars(){
+  document.querySelectorAll('#groups .c > .db').forEach(db=>{
+    const card = db.closest('.c');
+    const uid = card.dataset.uid;
+    db.querySelectorAll('.dbb').forEach(b=>b.onclick=e=>{
+      e.stopPropagation();
+      const v = b.dataset.v;
+      if(v==='merge'){
+        if(verdictOf(uid)==='merge'){ setVerdict(uid,'pending'); return; }  // 再点取消
+        openMergePop(uid, db);
+      } else setVerdict(uid, v);
+    });
+    const gt = db.querySelector('[data-goto]');
+    if(gt) gt.onclick = e=>{ e.stopPropagation(); gotoCard(gt.dataset.goto); };
+  });
+}
+function closeMergePops(){ document.querySelectorAll('.mpop').forEach(p=>p.remove()); }
+function openMergePop(uid, db){
+  closeMergePops();
+  const x = BY[uid];
+  const targets = validMergeTargets(uid).sort((a,b)=>b.chars-a.chars);
+  if(!targets.length) return;
+  const pop = document.createElement('div');
+  pop.className = 'mpop';
+  pop.innerHTML = `<input type="text" placeholder="搜同组技能…" autocomplete="off"><div class="mlist"></div>`;
+  const list = pop.querySelector('.mlist');
+  const draw = kw=>{
+    const ks = (kw||'').toLowerCase();
+    const ts = targets.filter(t=>!ks || title(t).toLowerCase().includes(ks) || t.name.toLowerCase().includes(ks));
+    list.innerHTML = ts.length ? ts.map(t=>`<div class="mopt" data-t="${esc(t.uid)}">
+      <div class="mn">${esc(title(t))}</div>
+      <div class="me">${esc(t.name)} · ${(t.chars/10000).toFixed(1)} 万字</div></div>`).join('')
+      : `<div class="mnone">同组没有匹配的技能</div>`;
+    list.querySelectorAll('.mopt').forEach(o=>o.onclick=e=>{
+      e.stopPropagation();
+      setVerdict(uid,'merge',o.dataset.t);
+      closeMergePops();
+    });
+  };
+  draw('');
+  pop.querySelector('input').oninput = e=>draw(e.target.value.trim());
+  pop.onclick = e=>e.stopPropagation();
+  db.appendChild(pop);
+  pop.querySelector('input').focus();
+}
+document.addEventListener('click', closeMergePops);
+
+function gotoCard(uid){
+  closePanel(); closeDrawer();
+  const el = document.querySelector(`#groups .c[data-uid="${CSS.escape(uid)}"]`);
+  if(!el) return;
+  if(el.style.display==='none'){ clearFilters(); clearSearch(); }
+  el.scrollIntoView({block:'center', behavior:'smooth'});
+  el.classList.add('flash'); setTimeout(()=>el.classList.remove('flash'), 1300);
+}
+
+function applyView(){
+  let n = 0;
+  document.querySelectorAll('#groups .grp').forEach(gr=>{
+    let g = 0;
+    gr.querySelectorAll('.c').forEach(c=>{
+      const ok = visible(BY[c.dataset.uid]);
+      c.style.display = ok ? '' : 'none';
+      if(ok) g++;
+    });
+    gr.style.display = g ? '' : 'none';
+    n += g;
+  });
+  const alertEl = document.querySelector('#groups .alert');
+  if(alertEl){
+    const ug = document.querySelector('#groups .grp[data-grp="未归类"]');
+    alertEl.style.display = (ug && ug.style.display!=='none') ? '' : 'none';
+  }
+  document.getElementById('matchinfo').textContent =
+    (state.q || hasAnyFilter() || state.onlyPending) ? `匹配 ${n} 个 / 共 ${D.length} 个` : '';
+  const em = document.getElementById('empty');
+  if(!n && D.length){
+    const chipsTxt = activeChips().map(c=>c.label).join('、');
+    em.innerHTML = state.q
+      ? `<b>没有匹配「${esc(state.q)}」的技能</b>${chipsTxt?`<div style="margin-top:4px">同时生效的筛选：${esc(chipsTxt)}</div>`:''}
+         <div class="eact"><button onclick="clearSearch()">清除搜索</button></div>`
+      : state.onlyPending && !hasAnyFilter()
+        ? `<b>没有待定的技能了</b><div style="margin-top:4px">50 个全部决策完毕，可以导出了</div>
+           <div class="eact"><button onclick="togglePending()">查看全部</button></div>`
+        : `<b>当前筛选条件下没有技能</b><div style="margin-top:4px">${esc(chipsTxt)}</div>
+           <div class="eact"><button onclick="clearFilters()">清除全部筛选</button></div>`;
+    em.style.display = '';
+  } else em.style.display = 'none';
+}
+
+// ═══ 进度 ═══
+function updateProgress(){
+  const done = D.filter(x=>verdictOf(x.uid)!=='pending').length;
+  const el = document.getElementById('prog');
+  document.getElementById('progt').textContent = `已决策 ${done} / ${D.length}`;
+  document.getElementById('progb').style.width = (D.length?done/D.length*100:0)+'%';
+  el.classList.toggle('done', done===D.length && D.length>0);
+  el.setAttribute('aria-pressed', String(state.onlyPending));
+  el.style.opacity = state.onlyPending ? '.65' : '1';
+  if(done===D.length && D.length>0)
+    document.getElementById('progt').textContent = `✓ ${D.length} 个全部决策完毕`;
+}
+function togglePending(){
+  state.onlyPending = !state.onlyPending;
+  applyView(); updateProgress();
+}
+
+// ═══ 勾选与对比 ═══
+function toggle(uid,el){
+  if(sel.has(uid)){ sel.delete(uid); el.classList.remove('on'); }
+  else{
+    if(sel.size>=4){
+      const m = document.getElementById('fbarmsg');
+      m.style.display = 'inline';
+      clearTimeout(m._t); m._t = setTimeout(()=>m.style.display='none', 2600);
+      el.classList.add('shake'); setTimeout(()=>el.classList.remove('shake'), 220);
+      return;
+    }
+    sel.add(uid); el.classList.add('on');
+  }
+  const tick = el.querySelector('.tick');
+  if(tick){
+    tick.setAttribute('aria-pressed', String(sel.has(uid)));
+    tick.setAttribute('aria-label', `${sel.has(uid)?'移出':'加入'}对比：${title(BY[uid])}`);
+  }
+  syncBar();
+}
+function syncBar(){
+  const b = document.getElementById('bar');
+  b.className = sel.size ? 'show' : '';
+  document.getElementById('cnt').textContent = `已选 ${sel.size} 个`;
+}
+
+function row(label, cells){
+  const n = cells.length;
+  return `<div class="row" style="grid-template-columns:82px repeat(${n},1fr)">
+    <div class="rl">${label}</div>${cells.map(c=>`<div class="cell">${c}</div>`).join('')}</div>`;
+}
+function dots(list, all){
+  return `<div class="dots">${all.map(a=>`<span class="dot ${list.includes(a)?'on':''}">${esc(a)}</span>`).join('')}</div>`;
+}
+function cmpDecisionCell(uid){
+  const v = verdictOf(uid);
+  const d = decisions[uid];
+  let stat = '';
+  if(v==='merge' && d && d.merge_into && BY[d.merge_into]) stat = ` → ${esc(title(BY[d.merge_into]))}`;
+  else if(v!=='pending') stat = '';
+  return `<div style="display:flex;gap:4px;flex-wrap:wrap">
+    <button class="dbb k ${v==='keep'?'on':''}" data-cd="keep" data-u="${esc(uid)}">留</button>
+    <button class="dbb d ${v==='drop'?'on':''}" data-cd="drop" data-u="${esc(uid)}">砍</button>
+    <button class="dbb m ${v==='merge'?'on':''}" data-cd="merge" data-u="${esc(uid)}"
+      ${validMergeTargets(uid).length?'':'disabled'}>并</button></div>
+    <div class="mini" style="margin-top:5px">${v==='pending'?'待定':V_LABEL[v]+stat}</div>`;
+}
+
+function compare(){
+  const xs = [...sel].map(u=>BY[u]).filter(Boolean);
+  if(!xs.length) return;
+  const allP=[...new Set(xs.flatMap(x=>platformOv(x)))];
+  const allI=[...new Set(xs.flatMap(x=>inputsOv(x)))];
+  const allO=[...new Set(xs.flatMap(x=>outputsOv(x)))];
+  let h = `<div class="sheet"><h2>并排对比</h2><div class="cmp">`;
+  h += row('技能', xs.map(x=>`<div class="h">${esc(title(x))}</div>
+      <div class="en">${esc(x.name)}</div>
+      <div class="mini" style="margin-top:6px">${esc(blurbFull(x))}</div>
+      ${sumOv(x) && x.desc_full && x.desc_full!==sumOv(x) ? `<details style="margin-top:6px"><summary class="mini">看原文</summary>
+      <div class="mini" style="margin-top:4px">${esc(x.desc_full)}</div></details>` : ''}`));
+  if(allP.length) h += row('目标平台', xs.map(x=>dots(platformOv(x), allP)));
+  if(allI.length) h += row('吃什么输入', xs.map(x=>dots(inputsOv(x), allI)));
+  if(allO.length) h += row('产出什么', xs.map(x=>dots(outputsOv(x), allO)));
+  h += row('安装状态', xs.map(x=> x.installed.hosts.length
+      ? `<span class="dot on">已装 · ${esc(x.installed.hosts.join(' / '))}${x.installed.as_name?'（'+esc(x.installed.as_name)+'）':''}</span>`
+      : '<span class="mini">未安装</span>'));
+  h += row('副本', xs.map(x=> x.copies>1
+      ? `<span class="dot on">${x.copies} 份副本</span> <span class="mini">内容完全相同</span>`
+      : '<span class="mini">1 份</span>'));
+  h += row('带的料', xs.map(x=>{
+      const got = BUCKETS.filter(b=>x.shape[b]>0);
+      if(!got.length) return '<span class="mini">只有一个 SKILL.md</span>';
+      return `<div class="dots">${got.map(b=>
+        `<span class="dot ${b==='训练与测试'?'on':''}">${b} ${x.shape[b]}</span>`).join('')}</div>`;
+  }));
+  h += row('包体', xs.map(x=>`<div class="mini">${x.shape.total} 个文件${x.version?' · v'+esc(x.version):''}
+      ${x.zh?' · 中文':' · 英文'} · 正文 ${(x.chars/10000).toFixed(1)} 万字</div>
+      <div class="mini" style="margin-top:4px;word-break:break-all">${esc(x.src)}</div>`));
+  h += row('决策', xs.map(x=>cmpDecisionCell(x.uid)));
+  h += `</div><div style="margin-top:24px;display:flex;gap:10px">
+    <button onclick="closePanel()">关掉</button>
+    <button onclick="clearAll()">清空重选</button></div>
+    <footer>以上全部从压缩包内的 SKILL.md 原文抽取。「目标平台/输入/产出」是关键词识别的结果（≈ 推测），
+    可能漏判或误判，拿不准就点开原包看一眼。</footer></div>`;
+  const p = document.getElementById('panel');
+  p.innerHTML = h;
+  p.className = 'show';
+  p.querySelectorAll('[data-cd]').forEach(b=>b.onclick=e=>{
+    e.stopPropagation();
+    const uid = b.dataset.u, v = b.dataset.cd;
+    if(v==='merge'){
+      if(verdictOf(uid)==='merge'){ setVerdict(uid,'pending'); compare(); return; }
+      // 对比面板里的"并"：优先并到本次对比里同组的另一个
+      const others = xs.filter(o=>o.uid!==uid && o.group===BY[uid].group);
+      if(others.length===1){ setVerdict(uid,'merge',others[0].uid); compare(); return; }
+      // 多个候选 → 关面板回主视图选
+      closePanel();
+      const el = document.querySelector(`#groups .c[data-uid="${CSS.escape(uid)}"]`);
+      if(el){ el.scrollIntoView({block:'center'});
+        const db = el.querySelector(':scope > .db'); if(db) openMergePop(uid, db); }
+      return;
+    }
+    setVerdict(uid, v);
+    compare();   // 重绘面板，主视图已由 refreshDecisions 同步
+  });
+}
+function closePanel(){document.getElementById('panel').className=''}
+function clearAll(){sel.clear();document.querySelectorAll('.c.on').forEach(e=>{
+  e.classList.remove('on');
+  const tick=e.querySelector('.tick');
+  if(tick){tick.setAttribute('aria-pressed','false');tick.setAttribute('aria-label',`加入对比：${title(BY[e.dataset.uid])}`);}
+});
+  closePanel();syncBar()}
+
+// ═══ 详情抽屉 ═══
+function zhStatHTML(uid){
+  const o = ov(uid);
+  if(o.zh_reviewed) return '<span style="color:var(--green)">已确认</span>';
+  if(o.zh_name!=null || o.zh_sum!=null) return '<span style="color:var(--amber)">已修改，待确认</span>';
+  const x = BY[uid];
+  const zs = x ? x.zh_state : '';
+  if(zs==='ai_draft') return 'AI 草稿，未确认';
+  if(zs==='stale') return '<span style="color:var(--amber)">译文已过期</span>';
+  if(zs==='missing') return '<span style="color:var(--amber)">待补中文</span>';
+  return '';
+}
+function guessRow(uid, field, label){
+  const x = BY[uid];
+  const all = (M.facets[field]||[]).map(o=>o.value);
+  const cur = field==='platform'?platformOv(x):field==='inputs'?inputsOv(x):outputsOv(x);
+  const covered = isOv(x,field);
+  const tags = all.map(v=>`<span class="gt ${cur.includes(v)?'on':''}" data-gf="${field}" data-gv="${esc(v)}">${esc(v)}</span>`).join('');
+  return `<div class="kv" style="align-items:flex-start"><b style="padding-top:2px">${label}</b>
+    <span style="flex:1">${tags||'<span class="mini">没有候选值</span>'}
+    ${covered?` <button class="greset" data-greset="${field}">恢复自动判断</button>`:''}</span></div>`;
+}
+function openDrawer(uid){
+  drawerUid = uid;
+  const x = BY[uid];
+  if(!x) return;
+  const dr = document.getElementById('drawer');
+  const zl = ZH_LABEL[zhStateOv(x)] || zhStateOv(x);
+  const zcls = zhStateOv(x)==='reviewed'?'t ok':(zhStateOv(x)==='ai_draft'?'t':'t w');
+  dr.innerHTML = `<button class="dx" id="dx" title="关闭（Esc）">×</button>
+    <div id="dttl">${esc(title(x))}</div>
+    <div class="en" style="margin-top:4px">${esc(x.name)}${x.version?' · v'+esc(x.version):''}</div>
+    <div style="margin-top:8px"><span class="${zcls}">${esc(zl)}</span>
+      ${x.group?`<span class="t" style="margin-left:4px">${esc(x.group)}</span>`:''}</div>
+
+    <div class="dsec"><div class="dl">决策</div>
+      <div class="dvbtns">
+        <button class="dvb k" data-dv="keep">留</button>
+        <button class="dvb d" data-dv="drop">砍</button>
+        <button class="dvb m" data-dv="merge" ${validMergeTargets(uid).length?'':'disabled title="这组没有别的技能可并"'}>并</button>
+      </div>
+      <div id="dmerge" style="margin-top:8px"></div>
+      <textarea id="dnote" maxlength="${MAX_NOTE_CHARS}" placeholder="备注：为什么留/砍/并…（失焦自动存）">${esc(decisions[uid]?decisions[uid].note||'':'')}</textarea>
+    </div>
+
+    <div class="dsec"><div class="dl">完整简介（原文）</div>
+      <div style="font-size:13.5px;line-height:1.65">${x.desc_flags.includes('desc_broken')
+        ? '<div class="dsbad">⚠️ 这个包的简介字段是坏的，需要点开原包看正文</div>' : esc(x.desc_full||x.desc||'')}</div>
+      ${x.zh_state==='stale'?'<div class="s0" style="margin-top:6px">原包内容已变更，这段译文可能过时</div>':''}
+    </div>
+
+    <div class="dsec"><div class="dl">中文审校 <span style="font-weight:400">（改动只进 decisions.json，不回写 zh_metadata.json）</span></div>
+      <div class="kv" style="display:block"><b style="min-width:0;display:block;margin-bottom:3px">中文名</b>
+        <textarea class="zhed nm" id="zhn" rows="1" maxlength="${MAX_NAME_CHARS}" placeholder="（空则用英文名）">${esc(ov(uid).zh_name!=null?ov(uid).zh_name:(x.zh_name||''))}</textarea></div>
+      <div class="kv" style="display:block;margin-top:8px"><b style="min-width:0;display:block;margin-bottom:3px">中文摘要</b>
+        <textarea class="zhed" id="zhs" rows="3" maxlength="${MAX_SUMMARY_CHARS}" placeholder="（空则用英文简介）">${esc(ov(uid).zh_sum!=null?ov(uid).zh_sum:(x.zh_sum||''))}</textarea></div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <button class="greset" id="zhok" style="font-size:12.5px;color:${ov(uid).zh_reviewed?'var(--green)':'var(--sel)'}">${ov(uid).zh_reviewed?'✓ 已确认':'✓ 确认这段中文没问题'}</button>
+        <span class="mini" id="zhstat">${zhStatHTML(uid)}</span>
+      </div>
+    </div>
+
+    <div class="dsec"><div class="dl">推测属性 <span style="font-weight:400">（点标签切换，写进 overrides）</span></div>
+      ${guessRow(uid,'platform','平台')}
+      ${guessRow(uid,'inputs','输入')}
+      ${guessRow(uid,'outputs','产出')}
+    </div>
+
+    <div class="dsec"><div class="dl">包体信息</div>
+      <div class="kv"><b>带料</b>${BUCKETS.filter(b=>x.shape[b]>0).map(b=>`${b} ${x.shape[b]}`).join('、')||'只有一个 SKILL.md'}</div>
+      <div class="kv"><b>文件数</b>${x.shape.total} 个</div>
+      <div class="kv"><b>正文</b>${x.chars.toLocaleString()} 字符（约 ${(x.chars/10000).toFixed(1)} 万字）</div>
+      <div class="kv"><b>位置</b><code>${esc(x.src)}</code></div>
+      ${x.inner?`<div class="kv"><b>包内路径</b><code>${esc(x.inner)}</code></div>`:''}
+    </div>
+
+    ${x.copies>1?`<div class="dsec"><div class="dl">重复副本（${x.copies} 份，内容完全相同，留一份即可）</div>
+      ${x.copy_srcs.map(s=>`<div class="kv"><code>${esc(s)}</code></div>`).join('')}</div>`:''}
+
+    ${x.multi?`<div class="dsec"><div class="dl">同名多版本 —— 名字相同但正文不同，是两个东西</div>
+      ${D.filter(o=>o.name===x.name && o.uid!==x.uid).map(o=>
+        `<div class="kv"><span class="lk" data-goto="${esc(o.uid)}">${esc(title(o))}</span>
+         <code style="margin-left:6px">${esc(o.src)}</code></div>`).join('')}</div>`:''}
+
+    <div class="dsec"><div class="dl">安装状态</div>
+      ${x.installed.hosts.length
+        ? x.installed.hosts.map(h=>`<div class="kv">已装到 <b style="min-width:0">${esc(h)}</b>${x.installed.as_name?`（目录名 <code>${esc(x.installed.as_name)}</code>）`:''}</div>`).join('')
+        : '<div class="mini">尚未安装到任何宿主</div>'}
+    </div>`;
+  document.getElementById('dmask').className = 'show';
+  dr.classList.add('show');
+  document.getElementById('dx').onclick = closeDrawer;
+  dr.querySelectorAll('[data-goto]').forEach(el=>el.onclick=()=>gotoCard(el.dataset.goto));
+  dr.querySelectorAll('.dvb').forEach(b=>b.onclick=()=>{
+    const v = b.dataset.dv;
+    if(v==='merge'){
+      if(verdictOf(uid)==='merge'){ setVerdict(uid,'pending'); return; }
+      // 抽屉里的"并"：在抽屉内出下拉
+      const box = document.getElementById('dmerge');
+      if(box.innerHTML){ box.innerHTML=''; return; }
+      const targets = validMergeTargets(uid).sort((a,b)=>b.chars-a.chars);
+      box.innerHTML = `<div class="mpop" style="position:static;box-shadow:none;width:100%">
+        <div class="mlist" style="max-height:260px">${targets.map(t=>`<div class="mopt" data-t="${esc(t.uid)}">
+          <div class="mn">${esc(title(t))}</div>
+          <div class="me">${esc(t.name)} · ${(t.chars/10000).toFixed(1)} 万字</div></div>`).join('')}</div></div>`;
+      box.querySelectorAll('.mopt').forEach(o=>o.onclick=e=>{
+        e.stopPropagation(); setVerdict(uid,'merge',o.dataset.t);
+      });
+      return;
+    }
+    setVerdict(uid, v);
+  });
+  document.getElementById('dnote').onblur = e=>setNote(uid, e.target.value.trim());
+  // ═══ 中文审校绑定 ═══
+  const zhn = document.getElementById('zhn');
+  const zhs = document.getElementById('zhs');
+  if(zhn) zhn.onblur = e=>{
+    const val = e.target.value.trim();
+    if(val===(x.zh_name||'')){ delete ov(uid).zh_name; if(!Object.keys(ov(uid)).length) delete overrides[uid]; }
+    else { if(!overrides[uid]) overrides[uid]={}; overrides[uid].zh_name = val||null; if(!val) delete overrides[uid].zh_name; }
+    saveLS(); render(); refreshDecisions();
+    if(drawerUid===uid){ const s=document.getElementById('zhstat'); if(s) s.innerHTML=zhStatHTML(uid); }
+  };
+  if(zhs) zhs.onblur = e=>{
+    const val = e.target.value.trim();
+    if(val===(x.zh_sum||'')){ if(overrides[uid]) delete overrides[uid].zh_sum; if(overrides[uid]&&!Object.keys(overrides[uid]).length) delete overrides[uid]; }
+    else { if(!overrides[uid]) overrides[uid]={}; overrides[uid].zh_sum = val||null; if(!val) delete overrides[uid].zh_sum; }
+    saveLS(); render(); refreshDecisions();
+    if(drawerUid===uid){ const s=document.getElementById('zhstat'); if(s) s.innerHTML=zhStatHTML(uid); }
+  };
+  const zhok = document.getElementById('zhok');
+  if(zhok) zhok.onclick = ()=>{
+    if(!overrides[uid]) overrides[uid]={};
+    if(overrides[uid].zh_reviewed){ delete overrides[uid].zh_reviewed; if(!Object.keys(overrides[uid]).length) delete overrides[uid]; }
+    else overrides[uid].zh_reviewed = true;
+    saveLS(); render(); refreshDecisions();
+    if(drawerUid===uid) openDrawer(uid);
+  };
+  // ═══ 推测属性编辑绑定 ═══
+  dr.querySelectorAll('.gt[data-gf]').forEach(el=>el.onclick=()=>{
+    const field = el.dataset.gf, val = el.dataset.gv;
+    if(!overrides[uid]) overrides[uid]={};
+    const base = field==='platform'?x.platform:field==='inputs'?x.inputs:x.outputs;
+    const cur = overrides[uid][field]!=null ? [...overrides[uid][field]] : [...base];
+    const i = cur.indexOf(val);
+    if(i>=0) cur.splice(i,1); else cur.push(val);
+    // 与自动值相同则视为未覆盖
+    const same = cur.length===base.length && cur.every(v=>base.includes(v));
+    if(same) delete overrides[uid][field]; else overrides[uid][field]=cur;
+    if(!Object.keys(overrides[uid]).length) delete overrides[uid];
+    saveLS(); render(); refreshDecisions();
+    if(drawerUid===uid) openDrawer(uid);
+  });
+  dr.querySelectorAll('[data-greset]').forEach(el=>el.onclick=()=>{
+    const field = el.dataset.greset;
+    if(overrides[uid]) delete overrides[uid][field];
+    if(overrides[uid] && !Object.keys(overrides[uid]).length) delete overrides[uid];
+    saveLS(); render(); refreshDecisions();
+    if(drawerUid===uid) openDrawer(uid);
+  });
+  fillDrawerDecision(uid);
+}
+function fillDrawerDecision(uid){
+  const v = verdictOf(uid);
+  document.querySelectorAll('#drawer .dvb').forEach(b=>{
+    b.classList.toggle('on', b.dataset.dv===v);
+    b.setAttribute('aria-pressed', b.dataset.dv===v ? 'true':'false');
+  });
+  const box = document.getElementById('dmerge');
+  if(box && v==='merge'){
+    const d = decisions[uid];
+    const t = d && d.merge_into && BY[d.merge_into];
+    if(t) box.innerHTML = `<div class="mini">并入目标：<b style="color:var(--merge)">${esc(title(t))}</b>
+      <span class="lk" style="margin-left:8px" id="dchg">换一个</span></div>`;
+    const ch = document.getElementById('dchg');
+    if(ch) ch.onclick = ()=>{ box.innerHTML=''; document.querySelector('#drawer .dvb.m').click(); };
+  } else if(box && v!=='merge' && !box.querySelector('.mpop')) box.innerHTML='';
+}
+function closeDrawer(){
+  drawerUid = null;
+  document.getElementById('drawer').classList.remove('show');
+  document.getElementById('dmask').className = '';
+}
+function closeHelp(){ document.getElementById('help').classList.remove('show'); }
+function openHelp(){ document.getElementById('help').classList.add('show'); }
+
+// ═══ 导出 ═══
+function download(name, text, type){
+  const b = new Blob([text], {type: type||'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(b); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+}
+function exportJSON(){
+  download('decisions.json', JSON.stringify({
+    schema_version:1, updated_at:nowISO(), decisions, overrides }, null, 2));
+}
+function groupOrder(){
+  const g = M.groups.map(x=>x.name);
+  if(D.some(x=>x.group==='未归类')) g.push('未归类');
+  return g;
+}
+function exportMD(){
+  const gs = groupOrder();
+  const byV = {keep:[], drop:[], merge:[], pending:[]};
+  D.forEach(x=>byV[verdictOf(x.uid)].push(x));
+  const done = D.length - byV.pending.length;
+  const dt = new Date();
+  const pad = n=>String(n).padStart(2,'0');
+  const dateStr = `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}`;
+  let md = `# 技能清理清单\n生成于 ${dateStr} · 共 ${D.length} 个技能 · 已决策 ${done} 个\n`;
+
+  const sec = (title_, arr, fn)=>{
+    if(!arr.length) return;
+    md += `\n## ${title_}（${arr.length} 个）\n`;
+    gs.forEach(g=>{
+      const mem = arr.filter(x=>x.group===g);
+      if(!mem.length) return;
+      md += `\n### ${g}\n`;
+      mem.forEach(fn);
+    });
+  };
+
+  sec('保留', byV.keep, x=>{
+    md += `- **${title(x)}** \`${x.name}\`${x.version?' v'+x.version:''}\n`;
+    const d = decisions[x.uid];
+    if(d && d.note) md += `  - 备注：${d.note}\n`;
+    md += `  - 位置：${x.src}\n`;
+  });
+  sec('淘汰', byV.drop, x=>{
+    md += `- ~~${title(x)}~~ \`${x.name}\`\n`;
+    md += `  - 位置：${x.src}${x.copies>1?`（另有 ${x.copies-1} 份副本）`:''}\n`;
+    const d = decisions[x.uid];
+    if(d && d.note) md += `  - 备注：${d.note}\n`;
+    if(x.installed.hosts.length)
+      md += `  - ⚠️ 已装在 ${x.installed.hosts.join('、')}，需去对应宿主的 skills 目录删除\n`;
+  });
+  if(byV.merge.length){
+    md += `\n## 合并（${byV.merge.length} 条）\n`;
+    byV.merge.forEach(x=>{
+      const d = decisions[x.uid];
+      const t = d && d.merge_into && BY[d.merge_into];
+      md += `- **${title(x)}**（${x.src}）→ 并入 → **${t?title(t):'（未选目标）'}**${t?`（${t.src}）`:''}\n`;
+    });
+  }
+  sec('待定', byV.pending, x=>{
+    md += `- ${title(x)} \`${x.name}\` —— ${x.src}\n`;
+  });
+
+  // 待处理
+  const todos = [];
+  const dupFiles = D.reduce((n,x)=>n+(x.copies>1?x.copies-1:0),0);
+  if(dupFiles) todos.push(`重复副本可直接删除的：${dupFiles} 个文件`);
+  const stale = D.filter(x=>x.zh_state==='stale').length;
+  if(stale) todos.push(`中文译文过期需重跑 zh_build.py：${stale} 个`);
+  const broken = D.filter(x=>x.desc_flags.includes('desc_broken')).length;
+  if(broken) todos.push(`简介解析异常需手工看原包：${broken} 个`);
+  const mergedNoTarget = byV.merge.filter(x=>!(decisions[x.uid]&&decisions[x.uid].merge_into)).length;
+  if(mergedNoTarget) todos.push(`标了「并」但没选目标的：${mergedNoTarget} 个`);
+  if(todos.length){
+    md += `\n## 待处理\n`;
+    todos.forEach(t=>md += `- ${t}\n`);
+  }
+  md += `\n---\n本清单由技能能力工作台导出，全程只读；删除文件请照此清单手动执行。\n`;
+  download('技能清理清单.md', md, 'text/markdown');
+}
+// 可选第三条腿：直接放回 collection-workbench/ 就能被 <script src> 自动读回，连重跑 workbench.py 都省
+function exportJS(){
+  const payload = { schema_version:1, updated_at:nowISO(), decisions, overrides };
+  download('decisions.js',
+    '// 页面导出，直接放回 collection-workbench/ 即可\n' +
+    'window.__WORKBENCH_DECISIONS__ = ' + JSON.stringify(payload, null, 2) + ';\n',
+    'application/javascript');
+}
+function doExport(){
+  exportJSON();
+  setTimeout(exportMD, 300);
+  setTimeout(exportJS, 600);
+  importedFile = { decisions: JSON.parse(JSON.stringify(decisions)) };  // 导出后视为已同步
+  updateExpBadge();
+}
+
+// ═══ 导入 ═══
+function doImport(file){
+  const mi = document.getElementById('matchinfo');
+  if(!file || file.size>MAX_IMPORT_BYTES){
+    mi.textContent = `导入失败：文件不得超过 ${Math.round(MAX_IMPORT_BYTES/1024/1024)} MB`;
+    setTimeout(()=>applyView(),3500);
+    return;
+  }
+  const r = new FileReader();
+  r.onload = ()=>{
+    try{
+      if(typeof r.result!=='string' || r.result.length>MAX_IMPORT_BYTES) throw new Error('导入内容超限');
+      const j = JSON.parse(r.result);
+      const n = mergeFile(j);
+      saveLS(); render();
+      if(drawerUid) openDrawer(drawerUid);
+      mi.textContent = n ? `已合并 ${n} 条来自文件的决策` : '文件里的决策都已是最新';
+      setTimeout(()=>applyView(), 3500);
+    }catch(e){
+      mi.textContent = `导入失败：${e&&e.message?e.message:'这不是合法的 decisions.json'}`;
+      setTimeout(()=>applyView(), 3500);
+    }
+  };
+  r.onerror = ()=>{
+    mi.textContent = '导入失败：文件无法读取';
+    setTimeout(()=>applyView(),3500);
+  };
+  r.readAsText(file);
+}
+
+// ═══ 筛选面板 ═══
+function buildFilterPanel(){
+  const pop = document.getElementById('fpop');
+  pop.innerHTML = FSEC.map(([dim,label])=>{
+    const opts = M.facets[dim].map(({value,count})=>{
+      const dis = count===0;
+      const lab = dim==='zh_state' ? (ZH_LABEL[value]||value) : value;
+      return `<label class="fopt ${dis?'dis':''}">
+        <input type="checkbox" data-dim="${dim}" value="${esc(value)}" ${dis?'disabled':''}
+          ${state.f[dim].has(value)?'checked':''}>
+        <span>${esc(lab)}</span><span class="fc">${count}</span></label>`;
+    }).join('');
+    return `<div class="fsec"><div class="fl">${label}</div><div class="fopts">${opts}</div></div>`;
+  }).join('');
+  pop.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.onchange=()=>{
+    const dim = cb.dataset.dim;
+    cb.checked ? state.f[dim].add(cb.value) : state.f[dim].delete(cb.value);
+    syncHash(); renderChips(); applyView(); updateFbtn();
+  });
+}
+function activeChips(){
+  const out = [];
+  for(const [dim] of FSEC) for(const v of state.f[dim]){
+    const lab = dim==='zh_state' ? (ZH_LABEL[v]||v) : v;
+    out.push({dim, value:v, label:lab});
+  }
+  return out;
+}
+function hasAnyFilter(){ return FSEC.some(([d])=>state.f[d].size>0) }
+function renderChips(){
+  const box = document.getElementById('chips');
+  const list = activeChips();
+  box.innerHTML = list.map(c=>
+    `<span class="chip" data-dim="${c.dim}" data-v="${esc(c.value)}"><b>${esc(c.label)}</b><span class="cx">×</span></span>`
+  ).join('') + (list.length ? `<span class="chip all" id="clrall">清除全部筛选</span>` : '');
+  box.querySelectorAll('.chip:not(.all)').forEach(ch=>ch.onclick=()=>{
+    state.f[ch.dataset.dim].delete(ch.dataset.v);
+    syncHash(); buildFilterPanel(); renderChips(); applyView(); updateFbtn();
+  });
+  const ca = document.getElementById('clrall');
+  if(ca) ca.onclick = clearFilters;
+}
+function clearFilters(){
+  for(const [d] of FSEC) state.f[d].clear();
+  state.onlyPending = false;
+  syncHash(); buildFilterPanel(); renderChips(); applyView(); updateFbtn(); updateProgress();
+}
+function updateFbtn(){
+  const n = activeChips().length;
+  const b = document.getElementById('fbtn');
+  b.textContent = n ? `筛选 · ${n}` : '筛选';
+  b.classList.toggle('on', n>0);
+}
+
+function syncHash(){
+  const parts = [];
+  for(const [dim] of FSEC) for(const v of state.f[dim])
+    parts.push(dim+':'+encodeURIComponent(v));
+  const h = parts.length ? '#f='+parts.join(',') : '#';
+  if(location.hash !== h) location.hash = h;
+}
+function loadHash(){
+  const m = location.hash.match(/^#f=(.+)$/);
+  if(!m) return;
+  const valid = {};
+  for(const [dim] of FSEC) valid[dim] = new Set(M.facets[dim].map(o=>o.value));
+  m[1].split(',').forEach(p=>{
+    const i = p.indexOf(':'); if(i<0) return;
+    const dim = p.slice(0,i), v = decodeURIComponent(p.slice(i+1));
+    if(state.f[dim] && valid[dim] && valid[dim].has(v)) state.f[dim].add(v);
+  });
+}
+
+// ═══ 搜索 ═══
+let qTimer = null;
+function onQ(){
+  clearTimeout(qTimer);
+  qTimer = setTimeout(()=>{
+    state.q = document.getElementById('q').value.trim();
+    document.getElementById('srchbox').classList.toggle('has', !!state.q);
+    render();
+  },150);
+}
+function clearSearch(){
+  clearTimeout(qTimer);
+  qTimer = null;
+  document.getElementById('q').value = '';
+  state.q = '';
+  document.getElementById('srchbox').classList.remove('has');
+  render();
+}
+
+// ═══ 启动 ═══
+function fail(msg){ document.getElementById('boot').innerHTML = `<div class="alert">${msg}</div>`; }
+function boot(){
+  if(!M){ return fail(`<b>没有加载到数据</b> —— 同目录缺少 <code>data.js</code>。
+    先跑一次 <code>python3 workbench.py</code>，然后刷新本页。`); }
+  if(M.schema_version !== 3){ return fail(`<b>数据版本对不上</b> —— data.js 是 v${esc(M.schema_version)}，
+    本页需要 v3。更新 <code>workbench.py</code> 或 <code>index.html</code>，两边要同时改。`); }
+  if(!D.length){ return fail(`<b>收藏夹里没找到任何 SKILL.md</b><br>扫描目录：<code>${esc(M.source_dir)}</code>`); }
+  document.getElementById('hint').innerHTML =
+    `<div class="hint-meta">
+       <strong>${M.stats.skills} 个技能 · ${M.groups.length} 个能力组</strong>
+       <span class="hint-pill safe">只读，不解压</span>
+       <span class="hint-pill">更新于 ${esc(M.generated_at)}</span>
+       ${location.protocol==='file:'?'<span class="hint-pill">本地手动入口</span>':''}
+     </div>
+     <p class="hint-copy">在卡片底部直接标 <b>留 / 砍 / 并</b>，再点一次即可取消；决策自动保存在当前浏览器。
+     勾选最多 4 张卡片可并排对比，点「导出」可获取 <code>decisions.json</code> 与清理清单。
+     <span class="t g" style="cursor:default">推测标签</span> 来自关键词判断，可能不准。</p>`;
+
+  loadLS();
+  // decisions.js：自动读回这条腿。文件不存在时控制台留一条加载失败是预期行为，不探测不提示。
+  let mergedN = 0;
+  if(window.__WORKBENCH_DECISIONS__){
+    try{
+      mergedN = mergeFile(window.__WORKBENCH_DECISIONS__,{allowUnknownUid:true});
+      saveLS();
+    }catch(error){
+      console.warn('已忽略无效的 decisions.js：',error.message);
+    }
+  }
+  loadHash();
+  buildFilterPanel();
+  renderChips();
+  updateFbtn();
+  updateExpBadge();
+
+  document.getElementById('q').addEventListener('input', onQ);
+  document.getElementById('qx').onclick = clearSearch;
+  document.getElementById('srt').onchange = e=>{ state.sort = e.target.value; render(); };
+  document.getElementById('prog').onclick = togglePending;
+  document.getElementById('exp').onclick = doExport;
+  document.getElementById('imp').onclick = ()=>document.getElementById('impfile').click();
+  document.getElementById('impfile').onchange = e=>{
+    if(e.target.files[0]) doImport(e.target.files[0]);
+    e.target.value = '';
+  };
+  document.getElementById('dmask').onclick = closeDrawer;
+  document.getElementById('bk').onclick = ()=>{ [...sel].forEach(u=>setVerdict(u,'keep')); };
+  document.getElementById('bd').onclick = ()=>{ [...sel].forEach(u=>setVerdict(u,'drop')); };
+  const fp = document.getElementById('fpanel');
+  document.getElementById('fbtn').onclick = e=>{
+    e.stopPropagation(); closeMergePops(); fp.classList.toggle('show');
+    e.currentTarget.setAttribute('aria-expanded', String(fp.classList.contains('show')));
+  };
+  document.getElementById('fpop').onclick = e=>e.stopPropagation();
+  const cfw = document.getElementById('cfwrap');
+  document.getElementById('cfbtn').onclick = e=>{ e.stopPropagation(); cfw.classList.toggle('show'); };
+  document.getElementById('cfpanel').onclick = e=>e.stopPropagation();
+  document.addEventListener('click', ()=>{
+    fp.classList.remove('show'); cfw.classList.remove('show');
+    document.getElementById('fbtn').setAttribute('aria-expanded','false');
+  });
+  document.addEventListener('keydown', e=>{
+    const helpEl = document.getElementById('help');
+    if(e.key==='Escape'){
+      if(helpEl.classList.contains('show')) return closeHelp();
+      if(document.querySelector('.mpop')) return closeMergePops();
+      if(document.getElementById('panel').className==='show') return closePanel();
+      if(document.getElementById('drawer').classList.contains('show')) return closeDrawer();
+      if(fp.classList.contains('show')){
+        fp.classList.remove('show');
+        document.getElementById('fbtn').setAttribute('aria-expanded','false');
+        return;
+      }
+      if(document.getElementById('cfwrap').classList.contains('show')) return document.getElementById('cfwrap').classList.remove('show');
+      if(state.q) return clearSearch();
+    }
+    if(e.key==='/' && document.activeElement!==document.getElementById('q')
+       && !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)){
+      e.preventDefault(); document.getElementById('q').focus();
+      return;
+    }
+    // 帮助浮层开关
+    if(e.key==='?' && !/^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)){
+      e.preventDefault(); helpEl.classList.toggle('show'); return;
+    }
+    // 卡片网格键盘导航：只在焦点在卡片上且不在输入框时生效
+    const ae = document.activeElement;
+    const inCard = ae && ae.classList && ae.classList.contains('c');
+    if(inCard && !/^(INPUT|TEXTAREA)$/.test(ae.tagName)){
+      const uid = ae.dataset.uid;
+      const cards = [...document.querySelectorAll('#groups .c')].filter(el=>el.offsetParent!==null);
+      const idx = cards.indexOf(ae);
+      const cols = Math.max(1, Math.round(document.querySelector('#groups .cards')?.offsetWidth / (ae.offsetWidth+14)) || 1);
+      if(e.key===' '){ e.preventDefault(); toggle(uid, ae); return; }
+      if(e.key==='Enter'){ e.preventDefault(); openDrawer(uid); return; }
+      if(e.key==='k'||e.key==='K'){ e.preventDefault(); setVerdict(uid, verdictOf(uid)==='keep'?'pending':'keep'); return; }
+      if(e.key==='d'||e.key==='D'){ e.preventDefault(); setVerdict(uid, verdictOf(uid)==='drop'?'pending':'drop'); return; }
+      if(e.key==='m'||e.key==='M'){ e.preventDefault(); const db=ae.querySelector(':scope > .db'); if(db) openMergePop(uid, db); return; }
+      if(e.key==='c'||e.key==='C'){ e.preventDefault(); compare(); return; }
+      let ni = -1;
+      if(e.key==='ArrowRight') ni = idx+1;
+      else if(e.key==='ArrowLeft') ni = idx-1;
+      else if(e.key==='ArrowDown') ni = idx+cols;
+      else if(e.key==='ArrowUp') ni = idx-cols;
+      if(ni>=0 && ni<cards.length){ e.preventDefault(); cards[ni].focus(); }
+    }
+  });
+
+  render();
+  // 首次加载也要刷一次决策视觉+冲突面板+进度（localStorage / decisions.js 读回的决策）
+  refreshDecisions();
+  // 合并提示在 render() 之后显示（render 里的 applyView 会重置 matchinfo）
+  if(mergedN){
+    const mi = document.getElementById('matchinfo');
+    mi.textContent = `已合并 ${mergedN} 条来自 decisions.js 的决策`;
+    setTimeout(()=>applyView(), 4000);
+  }
+}
+boot();
+</script>
+</body></html>

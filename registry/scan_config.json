@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "limits": {
+    "max_file_bytes": 262144,
+    "max_overlay_bytes": 2097152,
+    "max_package_file_bytes": 4194304,
+    "max_package_bytes": 33554432,
+    "max_package_files": 2000,
+    "max_depth": 5,
+    "max_entries_per_root": 5000,
+    "scan_timeout_seconds": 8.0,
+    "max_text_length": 4000
+  },
+  "hosts": [
+    {
+      "id": "codex",
+      "label": "Codex",
+      "kind": "host",
+      "skill_roots": ["{home}/.codex/skills"],
+      "plugin_roots": ["{home}/.codex/plugins/cache"]
+    },
+    {
+      "id": "claude",
+      "label": "Claude",
+      "kind": "host",
+      "skill_roots": ["{home}/.claude/skills"],
+      "plugin_roots": ["{home}/.claude/plugins/cache"]
+    },
+    {
+      "id": "hermes",
+      "label": "Hermes",
+      "kind": "host",
+      "skill_roots": ["{home}/.hermes/skills"],
+      "plugin_roots": []
+    },
+    {
+      "id": "workbuddy",
+      "label": "WorkBuddy",
+      "kind": "host",
+      "skill_roots": ["{home}/.workbuddy/skills"],
+      "plugin_roots": []
+    },
+    {
+      "id": "antigravity",
+      "label": "Antigravity",
+      "kind": "host",
+      "safe_metadata_only": true,
+      "placeholder": true,
+      "skill_roots": [],
+      "plugin_roots": []
+    }
+  ],
+  "codex_metadata_sources": {
+    "plugin_cache_root": "{home}/.codex/plugins/cache",
+    "mcp_manifest_name": ".mcp.json",
+    "cli_link": "{home}/.local/bin/codex",
+    "cli_target": "{home}/.codex/plugins/.plugin-appserver/codex",
+    "sdk_package_allowlist": ["@modelcontextprotocol/sdk"]
+  },
+  "allowed_source_roots": [],
+  "static_assets": []
+}

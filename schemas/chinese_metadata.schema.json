@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.ai-os.invalid/schemas/chinese-metadata.schema.json",
+  "title": "AI-Toolbox ChineseMetadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "items"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "items": {
+      "type": "array",
+      "maxItems": 2000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "asset_id",
+          "zh_name",
+          "source_name",
+          "summary",
+          "use_cases",
+          "not_for",
+          "examples",
+          "synonyms",
+          "source_ref",
+          "translated_from_hash",
+          "status",
+          "generated_at",
+          "evidence"
+        ],
+        "properties": {
+          "asset_id": {"type": "string", "minLength": 1, "maxLength": 240},
+          "zh_name": {"type": "string", "minLength": 1, "maxLength": 120},
+          "source_name": {"type": "string", "minLength": 1, "maxLength": 200},
+          "summary": {"type": "string", "minLength": 1, "maxLength": 1000},
+          "use_cases": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+          "not_for": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+          "examples": {"type": "array", "minItems": 1, "maxItems": 3, "items": {"type": "string", "minLength": 1, "maxLength": 500}},
+          "synonyms": {"type": "array", "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 120}},
+          "source_ref": {"type": "string", "minLength": 1, "maxLength": 1000},
+          "translated_from_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "status": {"enum": ["ai_draft", "reviewed", "stale"]},
+          "generated_at": {"type": "string", "format": "date-time"},
+          "reviewed_at": {"type": ["string", "null"], "format": "date-time"},
+          "evidence": {"type": "array", "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 1000}}
+        }
+      }
+    }
+  }
+}

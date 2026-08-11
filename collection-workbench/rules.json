@@ -1,0 +1,229 @@
+{
+  "schema_version": 3,
+  "_说明": "按顺序匹配，第一条命中即归组。name_any 匹配技能名（强信号），desc_any 匹配简介（弱信号，名字没中时才看）。exclude 一个都不能中。改这个文件不用改代码。",
+  "_说明_groups": "groups 是**展示顺序** + 组的说明与是否直接竞争；rules 是**匹配优先级**，第一条命中即归组。两者顺序不同且不可合并 —— 网文必须最先匹配（^webnovel 最无歧义），特化场景必须早于通用型（否则 whitebox/continuity 会被 seedance 抢走）。每条 rules[].group 必须在 groups 里存在，否则那一组会被前端静默丢掉。",
+  "groups": [
+    {
+      "name": "Seedance 提示词 · 通用型",
+      "desc": "都是把剧本/分镜/想法编译成 Seedance 提示词，功能高度重合",
+      "competing": true
+    },
+    {
+      "name": "Seedance 提示词 · 特化场景",
+      "desc": "各自吃一种特殊输入，互补而非竞争",
+      "competing": false
+    },
+    {
+      "name": "反推与提示词提取",
+      "desc": "从已有图/视频倒推出提示词",
+      "competing": true
+    },
+    {
+      "name": "电影感生图与视觉资产",
+      "desc": "把想法或参考图编译成电影质感的生图提示词",
+      "competing": true
+    },
+    {
+      "name": "配乐、音效与混音",
+      "desc": "分析已剪成片，完成配乐策划、音效匹配、对画剪辑与最终混音",
+      "competing": false
+    },
+    {
+      "name": "色彩 · 材质 · 画质",
+      "desc": "偏工程的画面处理",
+      "competing": false
+    },
+    {
+      "name": "人像与社媒生图",
+      "desc": "面向人像、写真、社交平台",
+      "competing": false
+    },
+    {
+      "name": "编剧与剧本",
+      "desc": "从想法到成稿剧本",
+      "competing": true
+    },
+    {
+      "name": "写作方法论",
+      "desc": "不生成内容，提供判断标准",
+      "competing": false
+    },
+    {
+      "name": "网文全家桶",
+      "desc": "同一个网文项目的多个命令，要装得整套装",
+      "competing": false
+    },
+    {
+      "name": "广告与爆款分析",
+      "desc": "商业向分析与创意",
+      "competing": false
+    },
+    {
+      "name": "造技能的元技能",
+      "desc": "用来把提示词/SOP 变成 skill",
+      "competing": true
+    },
+    {
+      "name": "工具类",
+      "desc": "跟创作无关的实用工具",
+      "competing": false
+    }
+  ],
+  "rules": [
+    {
+      "group": "网文全家桶",
+      "name_any": [
+        "^webnovel"
+      ]
+    },
+    {
+      "group": "Seedance 提示词 · 特化场景",
+      "name_any": [
+        "whitebox",
+        "白模",
+        "continuity",
+        "连续性",
+        "motion camera",
+        "rescue",
+        "救片"
+      ]
+    },
+    {
+      "group": "Seedance 提示词 · 通用型",
+      "name_any": [
+        "seedance",
+        "即梦"
+      ]
+    },
+    {
+      "group": "色彩 · 材质 · 画质",
+      "name_any": [
+        "color",
+        "色卡",
+        "upscale",
+        "4k",
+        "material",
+        "材质",
+        "画质"
+      ]
+    },
+    {
+      "group": "反推与提示词提取",
+      "name_any": [
+        "reverse",
+        "反推",
+        "extractor",
+        "extract",
+        "提取",
+        "reconstruction",
+        "distiller",
+        "reference-prompt"
+      ],
+      "desc_any": [
+        "反推",
+        "倒推",
+        "reverse",
+        "参考图复现",
+        "看图提取",
+        "提取提示词",
+        "visual treatment",
+        "把可见结构"
+      ]
+    },
+    {
+      "group": "人像与社媒生图",
+      "name_any": [
+        "portrait",
+        "selfie",
+        "midjourney",
+        "写真",
+        "人像",
+        "zhuangbi"
+      ]
+    },
+    {
+      "group": "电影感生图与视觉资产",
+      "name_any": [
+        "cinema",
+        "cinematic",
+        "fusion",
+        "realism",
+        "multiview",
+        "visual asset",
+        "视觉资产",
+        "九宫格"
+      ]
+    },
+    {
+      "group": "造技能的元技能",
+      "name_any": [
+        "skill-forge",
+        "skill-recaster",
+        "writing-great-skills",
+        "distillation",
+        "蒸馏",
+        "skill-creator",
+        "skill-factory",
+        "forge",
+        "capability-forge"
+      ],
+      "desc_any": [
+        "元技能",
+        "封装成 skill",
+        "重构为.*skill",
+        "编译为.{0,8}skill",
+        "能力包",
+        "编译为.{0,10}能力"
+      ]
+    },
+    {
+      "group": "广告与爆款分析",
+      "name_any": [
+        "tvc",
+        "viral",
+        "广告",
+        "爆款",
+        "impact-director"
+      ]
+    },
+    {
+      "group": "写作方法论",
+      "name_any": [
+        "methodology",
+        "方法论"
+      ]
+    },
+    {
+      "group": "编剧与剧本",
+      "name_any": [
+        "screenwriting",
+        "screenplay",
+        "script",
+        "drama",
+        "编剧",
+        "剧本",
+        "bianju",
+        "content-pipeline",
+        "短剧"
+      ],
+      "desc_any": [
+        "编剧",
+        "剧本",
+        "短剧",
+        "写故事"
+      ]
+    },
+    {
+      "group": "工具类",
+      "name_any": [
+        "wechat",
+        "wx-cli",
+        "fetch",
+        "微信",
+        "公众号",
+        "采集"
+      ]
+    }
+  ],
+  "overrides": {}
+}

@@ -1,0 +1,13 @@
+{
+  "name": "codex-observation-plugin",
+  "version": "1.2.3",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.0"
+  },
+  "scripts": {
+    "postinstall": "must-not-execute-postinstall"
+  },
+  "credentials": {
+    "token": "must-not-leak-package-token"
+  }
+}

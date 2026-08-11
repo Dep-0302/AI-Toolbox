@@ -1,0 +1,20 @@
+{
+  "name": "sample-plugin",
+  "description": "A safe manifest fixture.",
+  "version": "2.0.0",
+  "author": "Example Maintainer",
+  "license": "Apache-2.0",
+  "interface": {
+    "displayName": "Sample Plugin Display",
+    "defaultPrompt": ["must-not-enter-payload"]
+  },
+  "skills": ["sample-skill"],
+  "mcp_servers": [{"name": "sample-mcp", "command": "must-not-be-read"}],
+  "commands": ["sample-cli"],
+  "scripts": {
+    "postinstall": "this field must never execute"
+  },
+  "credentials": {
+    "token": "this field must never enter the payload"
+  }
+}
