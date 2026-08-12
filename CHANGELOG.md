@@ -2,6 +2,12 @@
 
 All notable public changes to AI-Toolbox are documented in this file.
 
+## 0.2.1 - 2026-08-12
+
+### Security
+
+- Updated development-only transitive dependencies to patched `nanoid` and `undici` releases. This clears the package audit and GitHub Dependabot alerts without changing the application runtime boundary.
+
 ## 0.2.0 - 2026-08-12
 
 ### Added

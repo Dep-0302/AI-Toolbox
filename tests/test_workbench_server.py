@@ -1314,7 +1314,7 @@ class WorkbenchHTTPTests(unittest.TestCase):
         status, headers, payload = self.request_json("/api/health")
         self.assertEqual(status, 200)
         self.assertEqual(payload["mode"], "observe-only")
-        self.assertEqual(payload["release_id"], "0.2.0-public")
+        self.assertEqual(payload["release_id"], "0.2.1-public")
         self.assertFalse(payload["degraded"])
         self.assertEqual(payload["errors"], [])
         self.assertFalse(payload["capabilities"]["host_mutation"])
