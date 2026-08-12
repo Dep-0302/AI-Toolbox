@@ -1,0 +1,219 @@
+{
+  "schema_version": 1,
+  "contract_id": "project-skill-observation-boundary-v1",
+  "phase": "readonly_workbench",
+  "data_contract": {
+    "registries": [
+      "registry/project_skill_projects.json",
+      "registry/project_skill_associations.json",
+      "registry/chinese_metadata.json"
+    ],
+    "schemas": [
+      "schemas/project_skill_projects.schema.json",
+      "schemas/project_skill_associations.schema.json",
+      "schemas/project_skill_snapshot.schema.json",
+      "schemas/chinese_metadata.schema.json"
+    ],
+    "fixture_root": "tests/fixtures/project-skills",
+    "contract_test": "tests/test_project_skill_contract.py",
+    "connections": {
+      "preview": true,
+      "scanner": true,
+      "api": true,
+      "ui": true,
+      "persistence": true
+    }
+  },
+  "source_scope": {
+    "root": "~/Documents",
+    "candidate_discovery": "top_level_directories_only",
+    "nested_projects": "explicit_registry_only",
+    "new_candidate_status": "unclassified",
+    "unclassified_policy": "list_only_no_skill_scan",
+    "session_selected_project": {
+      "enabled": true,
+      "selection": "native_picker_token_only",
+      "must_be_within_root": true,
+      "classification": "project",
+      "candidate_discovery": false,
+      "persistence": false,
+      "human_associations": false
+    }
+  },
+  "project_registry": {
+    "classifications": [
+      "project",
+      "container",
+      "archive",
+      "excluded",
+      "unclassified"
+    ],
+    "scannable_classifications": [
+      "project"
+    ],
+    "write_back_to_projects": false
+  },
+  "entry_points": [
+    {
+      "relative_path": ".agents/skills",
+      "kind": "host_entry",
+      "host_hint": "codex_compatible",
+      "binding_semantics": "project_binding_candidate"
+    },
+    {
+      "relative_path": ".claude/skills",
+      "kind": "host_specific_entry",
+      "host_hint": "claude",
+      "binding_semantics": "project_binding_candidate"
+    },
+    {
+      "relative_path": ".codex/skills",
+      "kind": "host_specific_or_legacy_entry",
+      "host_hint": "codex",
+      "binding_semantics": "observed_path_only"
+    },
+    {
+      "relative_path": ".hermes/skills",
+      "kind": "host_specific_entry",
+      "host_hint": "hermes",
+      "binding_semantics": "project_binding_candidate"
+    },
+    {
+      "relative_path": ".workbuddy/skills",
+      "kind": "host_specific_entry",
+      "host_hint": "workbuddy",
+      "binding_semantics": "project_binding_candidate"
+    },
+    {
+      "relative_path": "skills",
+      "kind": "generic_source",
+      "host_hint": null,
+      "binding_semantics": "source_only"
+    },
+    {
+      "relative_path": ".agents/plugins",
+      "kind": "plugin_container",
+      "host_hint": null,
+      "binding_semantics": "plugin_bundled_source"
+    }
+  ],
+  "metadata_projection": {
+    "manifest_name": "SKILL.md",
+    "read_manifest_body": false,
+    "frontmatter_allowlist": [
+      "name",
+      "description",
+      "version",
+      "author",
+      "license",
+      "agent_created"
+    ],
+    "optional_skill_metadata": {
+      "relative_path": "agents/openai.yaml",
+      "field_allowlist": [
+        "policy.allow_implicit_invocation"
+      ],
+      "evidence_semantics": "declaration_only"
+    },
+    "chinese_metadata_overlay": {
+      "relative_path": "registry/chinese_metadata.json",
+      "field_allowlist": [
+        "asset_id",
+        "source_name",
+        "zh_name",
+        "summary",
+        "use_cases",
+        "not_for",
+        "examples",
+        "status",
+        "translated_from_projection_sha256_v1"
+      ],
+      "freshness_basis": "projection_sha256_v1",
+      "evidence_semantics": "display_only_no_evidence_upgrade",
+      "missing_or_stale_fallback": "frontmatter_original"
+    },
+    "read_scripts": false,
+    "read_references": false,
+    "read_credentials": false,
+    "store_absolute_project_paths": false,
+    "render_free_text_as": "escaped_plain_text"
+  },
+  "evidence_contract": {
+    "file_discovery": "observed_only",
+    "project_binding": "recognized_entry_or_same_project_symlink_only",
+    "host_availability": "unverified",
+    "invocation_eligibility": "declaration_only",
+    "actual_use": "not_connected",
+    "lifecycle_action": "locked",
+    "human_association_is_separate": true
+  },
+  "symlink_policy": {
+    "source_root_or_ancestor": "reject",
+    "project_root_or_ancestor": "reject",
+    "skill_entry": "follow_same_project_only",
+    "outside_project": "record_without_reading_target",
+    "broken_or_loop": "record_without_reading_target",
+    "descendant_symlinks": "skip",
+    "path_race": "fail_closed",
+    "descriptor_anchoring_required": true
+  },
+  "excluded_boundaries": [
+    ".git",
+    "node_modules",
+    "dist",
+    "build",
+    ".cache",
+    "__pycache__",
+    "tmp",
+    "temp",
+    "fixtures",
+    "test-fixtures",
+    "90_归档",
+    "archive",
+    "archives"
+  ],
+  "limits": {
+    "max_project_candidates": 256,
+    "max_entries_per_project": 1000,
+    "max_depth": 5,
+    "max_manifest_bytes": 262144,
+    "max_frontmatter_bytes": 32768,
+    "max_text_length": 4000,
+    "scan_timeout_seconds": 12.0
+  },
+  "runtime_safety": {
+    "manual_refresh_only": true,
+    "foreground_only": true,
+    "network": false,
+    "process_execution": false,
+    "model_calls": false,
+    "reads_host_config_bodies": false,
+    "reads_sessions_or_logs": false,
+    "background_watchers": false,
+    "host_mutations": false,
+    "project_mutations": false
+  },
+  "persistence": {
+    "current_phase_writes": [
+      "generated/project-skills/snapshot.json",
+      "generated/project-skills/last-attempt.json",
+      "generated/project-skills/项目Skill总览.md"
+    ],
+    "future_write_root": "generated/project-skills",
+    "future_allowed_outputs": [
+      "generated/project-skills/snapshot.json",
+      "generated/project-skills/last-attempt.json",
+      "generated/project-skills/项目Skill总览.md"
+    ],
+    "atomic_writes": true,
+    "file_mode": "0600",
+    "write_observed_projects": false,
+    "external_sync": false
+  },
+  "failure_policy": {
+    "incomplete_scan_status": "partial",
+    "retain_last_complete_snapshot": true,
+    "absence_after_partial_means_removed": false,
+    "unsafe_input": "fail_closed"
+  }
+}

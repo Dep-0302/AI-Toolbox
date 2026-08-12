@@ -36,6 +36,7 @@ COLLECTION_SNAPSHOT_PATH = GENERATED_DIR / "collection-snapshot.json"
 COLLECTION_LOCK_PATH = GENERATED_DIR / ".collection-refresh.lock"
 COLLECTION_SIGNATURE_PATH = GENERATED_DIR / "collection-signature.json"
 CANDIDATE_SNAPSHOT_PATH = GENERATED_DIR / "candidate-catalog.json"
+PROJECT_SKILL_OUTPUT_ROOT = GENERATED_DIR / "project-skills"
 COLLECTION_SIGNATURE_SCHEMA_VERSION = 1
 DIST_DIR = ROOT / "dist"
 # 候选 builder/checker 只作为固定项目内模块载入；不通过 HTTP 静态暴露。
@@ -45,12 +46,13 @@ CANDIDATE_CHECKER_PATH = CANDIDATES_DIR / "check_data.py"
 NATIVE_FOLDER_PICKER_PATH = SRC / "native_folder_picker.py"
 MACOS_OSASCRIPT_PATH = Path("/usr/bin/osascript")
 API_VERSION = "v1"
-RELEASE_ID = "0.1.0-public"
+RELEASE_ID = "0.2.0-public"
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 MAX_REQUEST_BYTES = 1024
 FOLDER_SELECTION_TTL_SECONDS = 120
 FOLDER_PICKER_TIMEOUT_SECONDS = 300
 FOLDER_SELECTION_TARGET = "collection-source"
+PROJECT_SKILL_FOLDER_SELECTION_TARGET = "project-skill-source"
 _CANDIDATE_MODULE_LOCK = threading.RLock()
 HOST_IDS = ("codex", "claude", "hermes", "workbuddy", "antigravity")
 HOST_LABELS = {
@@ -118,6 +120,24 @@ from collection_scan import (  # noqa: E402
     build_collection_payload,
     validate_collection_payload,
 )
+from project_skill_scan import (  # noqa: E402
+    BOUNDARY_ID as PROJECT_SKILL_BOUNDARY_ID,
+    BOUNDARY_PATH as PROJECT_SKILL_BOUNDARY_PATH,
+    EXCLUDED_NAMES as PROJECT_SKILL_EXCLUDED_NAMES,
+    PRODUCTION_ROOT as PROJECT_SKILL_PRODUCTION_ROOT,
+    ScanRejected as ProjectSkillScanRejected,
+    build_project_skill_snapshot,
+    load_project_skill_runtime_boundary,
+    validate_project_skill_runtime_boundary,
+)
+from project_skill_report import (  # noqa: E402
+    ProjectSkillPersistenceError,
+    ProjectSkillStore,
+)
+
+
+class ProjectSkillReceiptUnavailable(RuntimeError):
+    """The complete snapshot committed, but its auxiliary attempt receipt did not."""
 
 
 class SnapshotValidationError(ValueError):
@@ -1518,6 +1538,70 @@ def validate_selected_source_root(value: Any) -> dict[str, Any]:
     }
 
 
+def validate_selected_project_root(value: Any) -> dict[str, Any]:
+    """Validate a picker-selected project inside the frozen Documents root."""
+
+    selected = validate_selected_source_root(value)
+    root = PROJECT_SKILL_PRODUCTION_ROOT.absolute()
+    path = selected["path"]
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        raise FolderSelectionError("project_folder_outside_observation_root") from None
+    if not relative.parts or any(part in PROJECT_SKILL_EXCLUDED_NAMES for part in relative.parts):
+        raise FolderSelectionError("project_folder_not_scannable")
+    return {**selected, "relative_path": relative.as_posix()}
+
+
+def build_in_memory_project_skill_preview(
+    selected_path: Path,
+    *,
+    expected_identity: tuple[int, int] | None = None,
+) -> dict[str, Any]:
+    """Observe one picker-selected project in memory without Registry or disk writes."""
+
+    boundary = load_project_skill_runtime_boundary(PROJECT_SKILL_BOUNDARY_PATH)
+    validate_project_skill_runtime_boundary(boundary, required_connection="api")
+    selected = validate_selected_project_root(str(selected_path))
+    identity = (selected["device"], selected["inode"])
+    if expected_identity is not None and identity != expected_identity:
+        raise FolderSelectionError("folder_identity_changed")
+    relative_path = selected["relative_path"]
+    project_id = "session-project:" + hashlib.sha256(relative_path.encode("utf-8")).hexdigest()[:16]
+    confirmed_on = datetime.now(timezone.utc).date().isoformat()
+    payload = build_project_skill_snapshot(
+        root=PROJECT_SKILL_PRODUCTION_ROOT,
+        projects_registry={
+            "schema_version": 1,
+            "registry_id": "project-skill-session-projects-v1",
+            "observation_boundary_ref": PROJECT_SKILL_BOUNDARY_ID,
+            "confirmed_on": confirmed_on,
+            "projects": [
+                {
+                    "project_id": project_id,
+                    "relative_path": relative_path,
+                    "classification": "project",
+                    "display_name": selected_path.name,
+                }
+            ],
+        },
+        associations_registry={
+            "schema_version": 1,
+            "registry_id": "project-skill-session-associations-v1",
+            "observation_boundary_ref": PROJECT_SKILL_BOUNDARY_ID,
+            "confirmed_on": confirmed_on,
+            "associations": [],
+        },
+        discover_candidates=False,
+    )
+    selected_after = validate_selected_project_root(str(selected_path))
+    if (selected_after["device"], selected_after["inode"]) != identity:
+        raise FolderSelectionError("folder_identity_changed")
+    if payload.get("candidates") != [] or len(payload.get("projects", [])) != 1:
+        raise ProjectSkillScanRejected("session_project_scope_mismatch")
+    return payload
+
+
 def native_folder_picker_status() -> dict[str, Any]:
     """Report whether the fixed same-Python native picker helper can be invoked."""
 
@@ -1993,6 +2077,77 @@ def record_failed_attempt() -> None:
     write_json_atomically(attempt, LAST_ATTEMPT_PATH)
 
 
+def scan_project_skills_and_persist() -> tuple[bool, dict[str, Any]]:
+    """Run the fixed-root project Skill scan and persist only its dedicated outputs."""
+
+    boundary = load_project_skill_runtime_boundary(PROJECT_SKILL_BOUNDARY_PATH)
+    validate_project_skill_runtime_boundary(boundary, required_connection="api")
+    payload = build_project_skill_snapshot()
+    store = ProjectSkillStore(PROJECT_SKILL_OUTPUT_ROOT.parents[1])
+    complete = store.persist_scan_result(payload)
+    if complete:
+        persisted = store.load_snapshot()
+        if persisted is None:
+            raise ProjectSkillPersistenceError("project Skill snapshot missing after promotion")
+        if store.last_receipt_error is not None:
+            raise ProjectSkillReceiptUnavailable(
+                "project Skill snapshot committed but attempt receipt was unavailable"
+            )
+        return True, persisted
+    return False, payload
+
+
+def load_project_skill_api_view() -> dict[str, Any] | None:
+    """Load only validated persisted project-Skill data; never trigger a scan."""
+
+    boundary = load_project_skill_runtime_boundary(PROJECT_SKILL_BOUNDARY_PATH)
+    validate_project_skill_runtime_boundary(boundary, required_connection="api")
+    store = ProjectSkillStore(PROJECT_SKILL_OUTPUT_ROOT.parents[1])
+    snapshot = store.load_snapshot()
+    auxiliary_errors: list[str] = []
+    try:
+        last_attempt = store.load_last_attempt()
+    except ProjectSkillPersistenceError:
+        if snapshot is None:
+            raise
+        last_attempt = None
+        auxiliary_errors.append("last_attempt_invalid")
+    if snapshot is None and last_attempt is None:
+        return None
+    if snapshot is None:
+        return {
+            "snapshot": None,
+            "last_attempt": last_attempt,
+            "report": {"available": False, "generation_id": None, "content": None},
+            "integrity": {"degraded": False, "errors": []},
+        }
+    if (
+        last_attempt is not None
+        and last_attempt["complete_snapshot_generation_id"] != snapshot["generation_id"]
+    ):
+        last_attempt = None
+        auxiliary_errors.append("last_attempt_stale")
+    elif last_attempt is None:
+        auxiliary_errors.append("last_attempt_missing")
+    try:
+        markdown = store.load_markdown(expected_snapshot=snapshot)
+    except ProjectSkillPersistenceError:
+        markdown = None
+        auxiliary_errors.append("report_invalid")
+    if markdown is None and "report_invalid" not in auxiliary_errors:
+        auxiliary_errors.append("report_missing")
+    return {
+        "snapshot": snapshot,
+        "last_attempt": last_attempt,
+        "report": {
+            "available": markdown is not None,
+            "generation_id": snapshot["generation_id"] if markdown is not None else None,
+            "content": markdown,
+        },
+        "integrity": {"degraded": bool(auxiliary_errors), "errors": auxiliary_errors},
+    }
+
+
 def _loopback_name(value: str) -> str:
     host = value.strip().lower()
     if host.startswith("[") and "]" in host:
@@ -2012,6 +2167,7 @@ class ToolboxServer(ThreadingHTTPServer):
         super().__init__(server_address, handler)
         self.csrf_token = secrets.token_urlsafe(24)
         self.refresh_lock = threading.Lock()
+        self.project_skill_refresh_lock = threading.Lock()
         self.source_state_lock = threading.RLock()
         self.folder_tokens: dict[str, dict[str, Any]] = {}
         self.folder_picker = native_folder_picker_status()
@@ -2041,7 +2197,12 @@ class ToolboxServer(ThreadingHTTPServer):
                 return None
             return dict(self.source_session)
 
-    def issue_folder_token(self, selection: dict[str, Any]) -> tuple[str, int]:
+    def issue_folder_token(
+        self,
+        selection: dict[str, Any],
+        *,
+        target: str = FOLDER_SELECTION_TARGET,
+    ) -> tuple[str, int]:
         now = time.monotonic()
         with self.source_state_lock:
             self.folder_tokens = {
@@ -2057,7 +2218,7 @@ class ToolboxServer(ThreadingHTTPServer):
                 self.folder_tokens.pop(oldest, None)
             token = secrets.token_urlsafe(32)
             self.folder_tokens[token] = {
-                "target": FOLDER_SELECTION_TARGET,
+                "target": target,
                 "path": selection["path"],
                 "display_path": selection["display_path"],
                 "device": selection["device"],
@@ -2066,13 +2227,18 @@ class ToolboxServer(ThreadingHTTPServer):
             }
         return token, FOLDER_SELECTION_TTL_SECONDS
 
-    def consume_folder_token(self, token: str) -> dict[str, Any]:
+    def consume_folder_token(
+        self,
+        token: str,
+        *,
+        expected_target: str = FOLDER_SELECTION_TARGET,
+    ) -> dict[str, Any]:
         now = time.monotonic()
         with self.source_state_lock:
             record = self.folder_tokens.pop(token, None)
         if record is None:
             raise FolderSelectionError("selection_token_invalid_or_replayed")
-        if record.get("target") != FOLDER_SELECTION_TARGET:
+        if record.get("target") != expected_target:
             raise FolderSelectionError("selection_token_target_mismatch")
         if record.get("expires_at", 0) <= now:
             raise FolderSelectionError("selection_token_expired")
@@ -2185,6 +2351,8 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
             "/api/collections/refresh",
             "/api/collections/check",
             "/api/candidates/refresh",
+            "/api/project-skills/refresh",
+            "/api/project-skills/folder-selection/confirm",
             "/api/folder-picker",
             "/api/folder-selection/confirm",
             "/api/folder-source/restore",
@@ -2310,6 +2478,35 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
         }
         if "snapshot_invalid" in errors:
             snapshot_health["error"] = "snapshot_invalid"
+        try:
+            project_skill_view = load_project_skill_api_view()
+        except (ProjectSkillScanRejected, ProjectSkillPersistenceError, OSError):
+            project_skill_view = None
+            errors.append("project_skill_snapshot_invalid")
+        project_skill_snapshot = (
+            project_skill_view.get("snapshot") if project_skill_view is not None else None
+        )
+        project_skill_health = {
+            "available": project_skill_snapshot is not None,
+            "generated_at": (
+                project_skill_snapshot.get("generated_at") if project_skill_snapshot else None
+            ),
+            "generation_id": (
+                project_skill_snapshot.get("generation_id") if project_skill_snapshot else None
+            ),
+            "refresh_state": (
+                "running" if self.server.project_skill_refresh_lock.locked() else "idle"
+            ),
+            "integrity": (
+                project_skill_view.get("integrity")
+                if project_skill_view is not None
+                else {"degraded": False, "errors": []}
+            ),
+        }
+        if project_skill_health["integrity"]["degraded"]:
+            errors.append("project_skill_auxiliary_invalid")
+        if "project_skill_snapshot_invalid" in errors:
+            project_skill_health["error"] = "snapshot_invalid"
         collection_health = {
             "available": collection_snapshot is not None,
             "generated_at": (
@@ -2354,6 +2551,7 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                     "running" if self.server.refresh_lock.locked() else "idle"
                 ),
                 "snapshot": snapshot_health,
+                "project_skill_snapshot": project_skill_health,
                 "collection_snapshot": collection_health,
                 "candidate_snapshot": candidate_health,
                 "last_attempt": attempt,
@@ -2363,6 +2561,7 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                     "scan": True,
                     "collection_scan": True,
                     "candidate_scan": True,
+                    "project_skill_scan": True,
                     "host_mutation": False,
                     "model_calls": False,
                     "external_network": False,
@@ -2417,6 +2616,32 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                 )
             else:
                 self._json(HTTPStatus.OK, snapshot)
+            return
+        if path == "/api/project-skills":
+            try:
+                view = load_project_skill_api_view()
+            except ProjectSkillScanRejected:
+                self._json(
+                    HTTPStatus.SERVICE_UNAVAILABLE,
+                    {"error": "project_skill_contract_unavailable"},
+                )
+                return
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError, ProjectSkillPersistenceError):
+                self._storage_error("project_skill_snapshot")
+                return
+            except Exception:
+                self._storage_error("project_skill_view")
+                return
+            if view is None:
+                self._json(
+                    HTTPStatus.NOT_FOUND,
+                    {
+                        "error": "project_skill_snapshot_missing",
+                        "message": "尚未建立项目 Skill 观察快照",
+                    },
+                )
+            else:
+                self._json(HTTPStatus.OK, view)
             return
         if path == "/api/collections":
             temporary = self.server.temporary_source()
@@ -2480,10 +2705,21 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
         if self.headers.get("X-AI-Toolbox-CSRF") != self.server.csrf_token:
             self._json(HTTPStatus.FORBIDDEN, {"error": "invalid_csrf"})
             return
+        if self.headers.get("Transfer-Encoding") is not None:
+            self._json(HTTPStatus.BAD_REQUEST, {"error": "unsupported_transfer_encoding"})
+            return
+        content_lengths = self.headers.get_all("Content-Length", failobj=[])
+        if not content_lengths:
+            self._json(HTTPStatus.LENGTH_REQUIRED, {"error": "content_length_required"})
+            return
+        if len(content_lengths) != 1 or "," in content_lengths[0]:
+            self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid_content_length"})
+            return
         try:
-            length = int(self.headers.get("Content-Length", "0"))
+            length = int(content_lengths[0])
         except ValueError:
-            length = MAX_REQUEST_BYTES + 1
+            self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid_content_length"})
+            return
         if length < 0 or length > MAX_REQUEST_BYTES:
             self._json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "request_too_large"})
             return
@@ -2493,8 +2729,14 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
             self._json(HTTPStatus.BAD_REQUEST, {"error": "invalid_json"})
             return
         if path == "/api/folder-picker":
-            valid_body = body == {"target": FOLDER_SELECTION_TARGET}
-        elif path == "/api/folder-selection/confirm":
+            valid_body = body in (
+                {"target": FOLDER_SELECTION_TARGET},
+                {"target": PROJECT_SKILL_FOLDER_SELECTION_TARGET},
+            )
+        elif path in {
+            "/api/folder-selection/confirm",
+            "/api/project-skills/folder-selection/confirm",
+        }:
             valid_body = (
                 isinstance(body, dict)
                 and set(body) == {"selection_token"}
@@ -2506,10 +2748,67 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
         if not valid_body:
             self._json(HTTPStatus.BAD_REQUEST, {"error": "unexpected_fields"})
             return
-        if not self.server.refresh_lock.acquire(blocking=False):
-            self._json(HTTPStatus.CONFLICT, {"error": "refresh_in_progress"})
+        refresh_lock = (
+            self.server.project_skill_refresh_lock
+            if path in {
+                "/api/project-skills/refresh",
+                "/api/project-skills/folder-selection/confirm",
+            }
+            else self.server.refresh_lock
+        )
+        if not refresh_lock.acquire(blocking=False):
+            self._json(
+                HTTPStatus.CONFLICT,
+                {
+                    "error": (
+                        "project_skill_refresh_in_progress"
+                        if path.startswith("/api/project-skills/")
+                        else "refresh_in_progress"
+                    )
+                },
+            )
             return
         try:
+            if path == "/api/project-skills/refresh":
+                try:
+                    complete, payload = scan_project_skills_and_persist()
+                except ProjectSkillScanRejected:
+                    self._json(
+                        HTTPStatus.SERVICE_UNAVAILABLE,
+                        {"error": "project_skill_contract_unavailable"},
+                    )
+                    return
+                except ProjectSkillReceiptUnavailable:
+                    self._json(
+                        HTTPStatus.INTERNAL_SERVER_ERROR,
+                        {
+                            "error": "project_skill_receipt_unavailable",
+                            "message": "完整快照已提交，但本次刷新回执不可用；可通过只读 GET 核对最新快照",
+                        },
+                    )
+                    return
+                except Exception:
+                    self._json(
+                        HTTPStatus.INTERNAL_SERVER_ERROR,
+                        {
+                            "error": "project_skill_scan_failed",
+                            "message": "本次项目 Skill 刷新失败；请通过只读 GET 核对最后可用快照",
+                        },
+                    )
+                    return
+                if not complete:
+                    self._json(
+                        HTTPStatus.UNPROCESSABLE_ENTITY,
+                        {
+                            "error": "project_skill_scan_incomplete",
+                            "message": "本次项目 Skill 观察不完整，上一份有效快照未被覆盖",
+                            "scan_status": payload["scan_status"],
+                            "generation_id": payload["generation_id"],
+                        },
+                    )
+                    return
+                self._json(HTTPStatus.OK, payload)
+                return
             try:
                 temporary = self.server.temporary_source()
                 if path == "/api/folder-picker":
@@ -2517,8 +2816,16 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                     if picked == {"selected": False, "cancelled": True}:
                         self._json(HTTPStatus.OK, picked)
                         return
-                    selection = validate_selected_source_root(picked["path"])
-                    token, expires_in = self.server.issue_folder_token(selection)
+                    target = body["target"]
+                    selection = (
+                        validate_selected_project_root(picked["path"])
+                        if target == PROJECT_SKILL_FOLDER_SELECTION_TARGET
+                        else validate_selected_source_root(picked["path"])
+                    )
+                    token, expires_in = self.server.issue_folder_token(
+                        selection,
+                        target=target,
+                    )
                     self._json(
                         HTTPStatus.OK,
                         {
@@ -2526,6 +2833,26 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                             "selection_token": token,
                             "display_path": selection["display_path"],
                             "expires_in": expires_in,
+                        },
+                    )
+                    return
+                if path == "/api/project-skills/folder-selection/confirm":
+                    record = self.server.consume_folder_token(
+                        body["selection_token"],
+                        expected_target=PROJECT_SKILL_FOLDER_SELECTION_TARGET,
+                    )
+                    payload = build_in_memory_project_skill_preview(
+                        record["path"],
+                        expected_identity=(record["device"], record["inode"]),
+                    )
+                    self._json(
+                        HTTPStatus.OK,
+                        {
+                            "snapshot": payload,
+                            "selection": {
+                                "mode": "temporary",
+                                "display_path": record["display_path"],
+                            },
                         },
                     )
                     return
@@ -2635,11 +2962,17 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                     (
                         HTTPStatus.UNPROCESSABLE_ENTITY
                         if temporary is not None
-                        or path == "/api/folder-selection/confirm"
+                        or path in {
+                            "/api/folder-selection/confirm",
+                            "/api/project-skills/folder-selection/confirm",
+                        }
                         else HTTPStatus.INTERNAL_SERVER_ERROR
                     ),
                     {
                         "error": (
+                            "selected_project_skill_scan_failed"
+                            if path == "/api/project-skills/folder-selection/confirm"
+                            else
                             "selected_source_scan_failed"
                             if temporary is not None
                             or path == "/api/folder-selection/confirm"
@@ -2654,6 +2987,9 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                             else "scan_failed"
                         ),
                         "message": (
+                            "所选项目的 Skill 只读观察未完成；登记项目快照与所选文件夹均未改变"
+                            if path == "/api/project-skills/folder-selection/confirm"
+                            else
                             "本次临时来源扫描失败，当前会话数据未被覆盖"
                             if temporary is not None
                             or path == "/api/folder-selection/confirm"
@@ -2686,7 +3022,7 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                 return
             self._json(HTTPStatus.OK, payload)
         finally:
-            self.server.refresh_lock.release()
+            refresh_lock.release()
 
     def do_OPTIONS(self) -> None:
         if not self._api_preflight():

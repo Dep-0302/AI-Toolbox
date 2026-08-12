@@ -1,0 +1,56 @@
+{
+  "scenario_version": 1,
+  "id": "metadata-limits",
+  "project": {
+    "project_id": "fixture-metadata-limits",
+    "relative_path": "fixture-metadata-limits",
+    "classification": "project"
+  },
+  "contract_limits": {
+    "max_manifest_bytes": 262144,
+    "max_frontmatter_bytes": 32768,
+    "max_text_length": 4000
+  },
+  "nodes": [
+    {
+      "type": "file",
+      "case_id": "frontmatter-byte-overrun",
+      "path": "fixture-metadata-limits/.agents/skills/frontmatter-overrun/SKILL.md",
+      "content_recipe": {
+        "prefix": "---\nname: frontmatter-overrun\ndescription: ",
+        "repeat": {"text": "x", "count": 32769},
+        "suffix": "\n---\n"
+      }
+    },
+    {
+      "type": "file",
+      "case_id": "text-length-overrun",
+      "path": "fixture-metadata-limits/.agents/skills/text-overrun/SKILL.md",
+      "content_recipe": {
+        "prefix": "---\nname: text-overrun\ndescription: ",
+        "repeat": {"text": "y", "count": 4001},
+        "suffix": "\n---\n"
+      }
+    },
+    {
+      "type": "file",
+      "case_id": "manifest-byte-overrun",
+      "path": "fixture-metadata-limits/.agents/skills/manifest-overrun/SKILL.md",
+      "content_recipe": {
+        "prefix": "---\nname: manifest-overrun\ndescription: Synthetic overrun.\n---\n",
+        "repeat": {"text": "z", "count": 262145},
+        "suffix": ""
+      }
+    }
+  ],
+  "expected": {
+    "scan_status": "partial",
+    "cases": {
+      "frontmatter-byte-overrun": {"result": "rejected", "error_code": "frontmatter_budget_exceeded"},
+      "text-length-overrun": {"result": "rejected", "error_code": "text_length_exceeded"},
+      "manifest-byte-overrun": {"result": "rejected", "error_code": "manifest_budget_exceeded"}
+    },
+    "oversized_content_persisted": false,
+    "body_read_count": 0
+  }
+}

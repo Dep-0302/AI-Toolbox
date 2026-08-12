@@ -1,0 +1,42 @@
+{
+  "scenario_version": 1,
+  "id": "marketplace-bait",
+  "project": {
+    "project_id": "fixture-project-marketplace",
+    "relative_path": "fixture-container-marketplace/sample-project",
+    "classification": "project"
+  },
+  "decision": "negative_boundary_sample",
+  "nodes": [
+    {
+      "type": "file",
+      "path": "fixture-container-marketplace/sample-project/.agents/plugins/marketplace.json",
+      "source": "static/marketplace-bait/.agents/plugins/marketplace.json"
+    },
+    {
+      "type": "file",
+      "path": "fixture-container-marketplace/sample-project/plugins/sample-bundle/skills/bait-one/SKILL.md",
+      "source": "static/marketplace-bait/plugins/sample-bundle/skills/bait-one/SKILL.md"
+    },
+    {
+      "type": "file",
+      "path": "fixture-container-marketplace/sample-project/plugins/sample-bundle/skills/bait-two/SKILL.md",
+      "source": "static/marketplace-bait/plugins/sample-bundle/skills/bait-two/SKILL.md"
+    }
+  ],
+  "must_not_read": [
+    "fixture-container-marketplace/sample-project/.agents/plugins/marketplace.json",
+    "fixture-container-marketplace/sample-project/plugins/sample-bundle/skills/bait-one/SKILL.md",
+    "fixture-container-marketplace/sample-project/plugins/sample-bundle/skills/bait-two/SKILL.md"
+  ],
+  "expected": {
+    "scan_status": "complete",
+    "manifest_read_count": 0,
+    "marketplace_content_read_count": 0,
+    "unapproved_plugins_descent_count": 0,
+    "file_observation_count": 0,
+    "logical_skill_count": 0,
+    "binding_evidence_count": 0,
+    "must_not_emit": ["BODY_SENTINEL_BAIT_PATH_DO_NOT_READ_OR_EMIT"]
+  }
+}

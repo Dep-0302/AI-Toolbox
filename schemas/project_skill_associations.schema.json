@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.ai-os.invalid/schemas/project-skill-associations.schema.json",
+  "title": "AI-Toolbox project Skill human association registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "registry_id",
+    "observation_boundary_ref",
+    "confirmed_on",
+    "associations"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "registry_id": {"$ref": "#/$defs/stable_id"},
+    "observation_boundary_ref": {"$ref": "#/$defs/stable_id"},
+    "confirmed_on": {"type": "string", "format": "date"},
+    "associations": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {"$ref": "#/$defs/human_association"}
+    }
+  },
+  "$defs": {
+    "stable_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[a-z0-9][a-z0-9._:-]*$"
+    },
+    "safe_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "pattern": "^(?![\\s\\S]*(?:/[U]sers/|file://|https?://|-----BEGIN|<script|api[_ -]?key|authorization|bearer[ \\t]))[\\s\\S]+$"
+    },
+    "human_association": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "association_id",
+        "project_id",
+        "relationship",
+        "reason",
+        "source"
+      ],
+      "properties": {
+        "association_id": {"$ref": "#/$defs/stable_id"},
+        "project_id": {"$ref": "#/$defs/stable_id"},
+        "relationship": {"const": "human_association"},
+        "asset_id": {"$ref": "#/$defs/stable_id"},
+        "unresolved_name": {"$ref": "#/$defs/safe_text"},
+        "reason": {"$ref": "#/$defs/safe_text"},
+        "source": {"$ref": "#/$defs/stable_id"}
+      },
+      "oneOf": [
+        {
+          "required": ["asset_id"],
+          "not": {"required": ["unresolved_name"]}
+        },
+        {
+          "required": ["unresolved_name"],
+          "not": {"required": ["asset_id"]}
+        }
+      ]
+    }
+  }
+}

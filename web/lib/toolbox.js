@@ -28,6 +28,10 @@ const CONNECTED_COVERAGE_STATUSES = new Set(['observed', 'missing', 'partial', '
 export const FINDING_LABELS = {
   localization_missing: '中文说明缺失',
   localization_stale: '中文说明待复核',
+  candidate_localization_missing: '候选 · 中文说明缺失',
+  candidate_localization_stale: '候选 · 中文说明待复核',
+  candidate_description_broken: '候选 · 简介解析异常',
+  candidate_description_truncated: '候选 · 卡片简介已截短',
   name_collision: '同名能力需确认',
   package_divergence: '同名能力包存在分歧',
   package_fingerprint_incomplete: '包指纹不完整',
@@ -48,12 +52,20 @@ export const DESIGN_NOTE_CODES = new Set(['package_fingerprint_incomplete'])
 // 每类观察项的大白话说明，直接显示在工作台，避免"看着不知道怎么回事"
 export const FINDING_NOTES = {
   symlink_outside_allowlist:
-    '宿主里有指向“观察范围外”的软链接，观察器只登记、不跟随、不读取目标——不是故障，也不改动宿主。常见于把桌面或外部目录里的能力链接进各宿主；确认目标可信即可忽略，想彻底消警可把该目录加入白名单。',
+    '宿主里有指向“观察范围外”的软链接，观察器只登记、不跟随、不读取目标——不是故障，也不改动宿主。常见于把外部目录里的共享能力链接进各宿主；确认目标可信即可忽略，想彻底消警可把该目录加入白名单。',
   symlink_broken: '软链接的目标不存在，未计入可用资产。核对链接指向或删除失效链接即可。',
   name_collision:
     '同名但完整包内容不同，已各自保留为锁定变体，不会被静默合并。确认以哪一份为准后在宿主侧对齐即可；工具只观察、不改宿主。',
   localization_missing:
     '该能力还没有中文名称/简介/适用场景，只读显示但暂不进入完整推荐。补齐中文说明后即可纳入。',
+  candidate_localization_missing:
+    '候选目录中的中文名称或简介尚未补齐；这只描述收藏候选，不表示宿主缺少或安装异常。',
+  candidate_localization_stale:
+    '候选原包内容指纹已经变化，需要重新核对中文说明；这只描述收藏候选，不表示宿主能力已失效。',
+  candidate_description_broken:
+    '候选简介字段损坏或混入了 frontmatter，需要回到原包正文核对。',
+  candidate_description_truncated:
+    '卡片摘要因篇幅被截短，完整正文仍可在候选详情中查看；这是一条说明，不是解析故障。',
   exact_duplicate_observed:
     '同一份能力在多个位置被观察到，已合并为一个资产并各自保留宿主绑定，无需处理。',
   package_fingerprint_incomplete:
@@ -76,6 +88,176 @@ export function countFindings(groups) {
 
 export function findingNote(code) {
   return FINDING_NOTES[code] || ''
+}
+
+const DANGEROUS_CANDIDATE_UIDS = new Set(['__proto__', 'constructor', 'prototype'])
+
+function validCandidateUid(item) {
+  const uid = item?.uid
+  return Boolean(
+    item &&
+    typeof item === 'object' &&
+    !Array.isArray(item) &&
+    typeof uid === 'string' &&
+    uid &&
+    uid.length <= 240 &&
+    !DANGEROUS_CANDIDATE_UIDS.has(uid)
+  )
+}
+
+function uniqueCandidateItems(catalog) {
+  if (!catalog || !Array.isArray(catalog.items)) return []
+  const uidCounts = new Map()
+  for (const item of catalog.items) {
+    if (!validCandidateUid(item)) continue
+    uidCounts.set(item.uid, (uidCounts.get(item.uid) || 0) + 1)
+  }
+  return catalog.items.filter((item) => validCandidateUid(item) && uidCounts.get(item.uid) === 1)
+}
+
+function candidateString(value, maxLength = 2000) {
+  return typeof value === 'string' ? value.slice(0, maxLength) : ''
+}
+
+function candidateStringArray(value, maxItems = 100, maxLength = 240) {
+  return Array.isArray(value)
+    ? value
+        .filter((entry) => typeof entry === 'string')
+        .slice(0, maxItems)
+        .map((entry) => entry.slice(0, maxLength))
+    : []
+}
+
+function candidateCount(value, fallback = 0) {
+  return Number.isFinite(value) && value >= 0 ? value : fallback
+}
+
+/**
+ * Build a crash-safe candidate view model. Invalid rows and every member of a
+ * duplicate-UID set are excluded so cards, decisions, and drawers keep the
+ * same one-to-one identity contract as health deep-links.
+ */
+export function candidateDisplayItems(catalog) {
+  return uniqueCandidateItems(catalog).map((item) => {
+    const rawShape = item.shape && typeof item.shape === 'object' && !Array.isArray(item.shape)
+      ? item.shape
+      : {}
+    const shape = Object.fromEntries(
+      Object.entries(rawShape)
+        .filter(([key, value]) => (
+          !DANGEROUS_CANDIDATE_UIDS.has(key) && Number.isFinite(value) && value >= 0
+        ))
+        .slice(0, 100),
+    )
+    const installed = item.installed && typeof item.installed === 'object' && !Array.isArray(item.installed)
+      ? item.installed
+      : {}
+    const name = candidateString(item.name, 240).trim() || '未命名候选'
+    return {
+      ...item,
+      uid: item.uid,
+      name,
+      zh_name: candidateString(item.zh_name, 240).trim(),
+      zh_sum: candidateString(item.zh_sum),
+      desc: candidateString(item.desc),
+      desc_full: candidateString(item.desc_full, 200000),
+      src: candidateString(item.src, 1000),
+      inner: candidateString(item.inner, 1000),
+      version: candidateString(item.version, 120),
+      group: candidateString(item.group, 240).trim() || '未归类',
+      zh_state: candidateString(item.zh_state, 80),
+      desc_flags: candidateStringArray(item.desc_flags, 50, 120),
+      tags: candidateStringArray(item.tags),
+      platform: candidateStringArray(item.platform),
+      inputs: candidateStringArray(item.inputs),
+      outputs: candidateStringArray(item.outputs),
+      copy_srcs: candidateStringArray(item.copy_srcs, 100, 1000),
+      chars: candidateCount(item.chars),
+      copies: candidateCount(item.copies, 1),
+      shape,
+      installed: {
+        ...installed,
+        hosts: candidateStringArray(installed.hosts, 50, 120),
+        as_name: candidateString(installed.as_name, 240),
+      },
+    }
+  })
+}
+
+export function candidateDescriptionState(item) {
+  const flags = new Set(
+    Array.isArray(item?.desc_flags)
+      ? item.desc_flags.filter((flag) => typeof flag === 'string')
+      : [],
+  )
+  const parsingError = flags.has('desc_broken') || flags.has('frontmatter_bleed')
+  return {
+    parsingError,
+    truncated: !parsingError && flags.has('truncated'),
+  }
+}
+
+export function candidateHealthFindings(catalog) {
+  if (!catalog || !Array.isArray(catalog.items)) return []
+
+  const findings = []
+  const seen = new Set()
+  const addFinding = (item, code, severity, detail) => {
+    const uid = item?.uid
+    if (
+      seen.has(`${code}:${uid}`)
+    ) return
+    seen.add(`${code}:${uid}`)
+    const zhName = typeof item.zh_name === 'string' ? item.zh_name.trim() : ''
+    const sourceName = typeof item.name === 'string' ? item.name.trim() : ''
+    findings.push({
+      code,
+      severity,
+      scope: 'candidate',
+      candidate_uid: uid,
+      title: (zhName || sourceName || '未命名候选').slice(0, 240),
+      detail,
+      ...(typeof item.src === 'string' && item.src ? { path: item.src.slice(0, 1000) } : {}),
+    })
+  }
+
+  for (const item of uniqueCandidateItems(catalog)) {
+
+    if (item.zh_state === 'stale') {
+      addFinding(
+        item,
+        'candidate_localization_stale',
+        'warning',
+        '候选原包内容指纹已变化，需要重新核对中文说明；不代表宿主能力失效。',
+      )
+    } else if (item.zh_state === 'missing') {
+      addFinding(
+        item,
+        'candidate_localization_missing',
+        'info',
+        '候选目录尚未补齐中文名称或简介；不代表宿主缺失。',
+      )
+    }
+
+    const description = candidateDescriptionState(item)
+    if (description.parsingError) {
+      addFinding(
+        item,
+        'candidate_description_broken',
+        'warning',
+        '候选简介字段损坏或混入了 frontmatter，需要查看原包正文。',
+      )
+    } else if (description.truncated) {
+      addFinding(
+        item,
+        'candidate_description_truncated',
+        'info',
+        '卡片摘要因篇幅被截短，完整正文仍可在候选详情中查看。',
+      )
+    }
+  }
+
+  return findings
 }
 
 export function localizationFor(item) {

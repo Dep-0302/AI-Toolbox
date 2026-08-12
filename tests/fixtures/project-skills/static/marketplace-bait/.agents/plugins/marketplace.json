@@ -1,0 +1,8 @@
+{
+  "fixture_sources": [
+    {
+      "id": "sample-bundle",
+      "relative_source": "./plugins/sample-bundle"
+    }
+  ]
+}

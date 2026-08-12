@@ -23,7 +23,6 @@
           "examples",
           "synonyms",
           "source_ref",
-          "translated_from_hash",
           "status",
           "generated_at",
           "evidence"
@@ -39,11 +38,19 @@
           "synonyms": {"type": "array", "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 120}},
           "source_ref": {"type": "string", "minLength": 1, "maxLength": 1000},
           "translated_from_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "translated_from_projection_sha256_v1": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
           "status": {"enum": ["ai_draft", "reviewed", "stale"]},
           "generated_at": {"type": "string", "format": "date-time"},
           "reviewed_at": {"type": ["string", "null"], "format": "date-time"},
           "evidence": {"type": "array", "maxItems": 64, "items": {"type": "string", "minLength": 1, "maxLength": 1000}}
-        }
+        },
+        "anyOf": [
+          {"required": ["translated_from_hash"]},
+          {"required": ["translated_from_projection_sha256_v1"]}
+        ]
       }
     }
   }

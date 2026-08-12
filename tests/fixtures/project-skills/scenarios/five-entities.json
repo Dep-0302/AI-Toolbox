@@ -1,0 +1,29 @@
+{
+  "scenario_version": 1,
+  "id": "five-entities",
+  "project": {
+    "project_id": "fixture-project-entities",
+    "relative_path": "fixture-project-entities",
+    "classification": "project"
+  },
+  "templates": {
+    "minimal_manifest": "---\nname: {{name}}\ndescription: Synthetic copied entity {{name}}.\n---\n"
+  },
+  "nodes": [
+    {"type": "file", "path": "fixture-project-entities/.agents/skills/entity-01/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "entity-01"}}},
+    {"type": "file", "path": "fixture-project-entities/.agents/skills/entity-02/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "entity-02"}}},
+    {"type": "file", "path": "fixture-project-entities/.agents/skills/entity-03/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "entity-03"}}},
+    {"type": "file", "path": "fixture-project-entities/.agents/skills/entity-04/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "entity-04"}}},
+    {"type": "file", "path": "fixture-project-entities/.agents/skills/entity-05/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "entity-05"}}}
+  ],
+  "expected": {
+    "scan_status": "complete",
+    "manifest_read_count": 5,
+    "file_observation_count": 5,
+    "logical_skill_count": 5,
+    "binding_evidence_count": 5,
+    "binding_state": "observed_binding",
+    "host_availability": "unverified",
+    "actual_use": "not_connected"
+  }
+}

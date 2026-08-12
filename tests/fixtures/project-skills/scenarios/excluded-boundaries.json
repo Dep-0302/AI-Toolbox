@@ -1,0 +1,36 @@
+{
+  "scenario_version": 1,
+  "id": "excluded-boundaries",
+  "project": {
+    "project_id": "fixture-excluded-boundaries",
+    "relative_path": "fixture-excluded-boundaries",
+    "classification": "project"
+  },
+  "node_matrix": {
+    "base_path": "fixture-excluded-boundaries/.agents/skills",
+    "excluded_segments": [
+      ".git",
+      "node_modules",
+      "dist",
+      "build",
+      ".cache",
+      "__pycache__",
+      "tmp",
+      "temp",
+      "fixtures",
+      "test-fixtures",
+      "90_归档",
+      "archive",
+      "archives"
+    ],
+    "suffix": "hidden/SKILL.md",
+    "content_utf8": "---\nname: excluded-bait\ndescription: Synthetic excluded boundary bait.\n---\n"
+  },
+  "expected": {
+    "scan_status": "complete",
+    "excluded_segment_count": 13,
+    "excluded_manifest_read_count": 0,
+    "file_observation_count": 0,
+    "logical_skill_count": 0
+  }
+}

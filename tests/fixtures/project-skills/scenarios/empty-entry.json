@@ -1,0 +1,20 @@
+{
+  "scenario_version": 1,
+  "id": "empty-entry",
+  "project": {
+    "project_id": "fixture-project-empty",
+    "relative_path": "fixture-project-empty",
+    "classification": "project"
+  },
+  "nodes": [
+    {"type": "directory", "path": "fixture-project-empty/.agents/skills"}
+  ],
+  "expected": {
+    "scan_status": "complete",
+    "entry_status": {".agents/skills": "empty"},
+    "manifest_read_count": 0,
+    "file_observation_count": 0,
+    "logical_skill_count": 0,
+    "errors": []
+  }
+}

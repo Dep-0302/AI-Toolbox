@@ -1,0 +1,28 @@
+{
+  "scenario_version": 1,
+  "id": "missing-entry",
+  "project": {
+    "project_id": "fixture-project-missing",
+    "relative_path": "fixture-project-missing",
+    "classification": "project"
+  },
+  "nodes": [
+    {"type": "directory", "path": "fixture-project-missing"}
+  ],
+  "expected": {
+    "scan_status": "complete",
+    "entry_status": {
+      ".agents/skills": "missing",
+      ".claude/skills": "missing",
+      ".codex/skills": "missing",
+      ".hermes/skills": "missing",
+      ".workbuddy/skills": "missing",
+      "skills": "missing",
+      ".agents/plugins": "missing"
+    },
+    "manifest_read_count": 0,
+    "file_observation_count": 0,
+    "logical_skill_count": 0,
+    "errors": []
+  }
+}

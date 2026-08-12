@@ -381,55 +381,78 @@ class ToolboxScannerTests(unittest.TestCase):
         self.assertEqual(len([item for item in payload["items"] if item["type"] == "sdk"]), 1)
 
     def test_deep_plugin_mcp_and_sdk_json_fail_closed(self) -> None:
-        depth = MAX_METADATA_JSON_DEPTH + 1
-        deep_array = "[" * depth + "null" + "]" * depth
-
         cases = (
             (
                 "plugin",
                 ".codex-plugin/plugin.json",
-                '{"name":"deep-plugin","nested":' + deep_array + "}",
+                '{"name":"deep-plugin","nested":',
+                "}",
                 "manifest_rejected",
             ),
             (
                 "mcp",
                 ".mcp.json",
-                '{"mcpServers":{"deep":{"nested":' + deep_array + "}}}",
+                '{"mcpServers":{"deep":{"nested":',
+                "}}}",
                 "metadata_source_rejected",
             ),
             (
                 "sdk",
                 "node_modules/@modelcontextprotocol/sdk/package.json",
-                '{"name":"@modelcontextprotocol/sdk","nested":' + deep_array + "}",
+                '{"name":"@modelcontextprotocol/sdk","nested":',
+                "}",
                 "metadata_source_rejected",
             ),
         )
+        depth_cases = (
+            ("policy_limit", MAX_METADATA_JSON_DEPTH + 1, True),
+            (
+                "parser_recursion",
+                max(MAX_METADATA_JSON_DEPTH + 1, os.sys.getrecursionlimit() + 100),
+                False,
+            ),
+        )
+        package_ref = (
+            "~/.codex/plugins/cache/fixture-channel/"
+            "codex-observation-plugin/1.2.3"
+        )
 
-        for asset_type, relative_path, content, expected_error in cases:
-            with self.subTest(asset_type=asset_type):
-                shutil.rmtree(self.home)
-                self.home.mkdir()
-                plugin = self._copy_codex_observation_plugin()
-                plugin.joinpath(relative_path).write_text(content, encoding="utf-8")
-
-                payload = build_toolbox_payload(home=self.home, now=FIXED_NOW)
-
-                self.assertIn(
-                    expected_error,
-                    {row["code"] for row in payload["scan_errors"]},
-                )
-                if asset_type in {"mcp", "sdk"}:
-                    coverage = next(
-                        row
-                        for row in payload["scan_scope"]["coverage"]
-                        if row["host_id"] == "codex"
-                        and row["asset_type"] == asset_type
+        for depth_label, depth, expect_depth_message in depth_cases:
+            deep_array = "[" * depth + "null" + "]" * depth
+            for asset_type, relative_path, prefix, suffix, expected_error in cases:
+                with self.subTest(asset_type=asset_type, depth=depth_label):
+                    shutil.rmtree(self.home)
+                    self.home.mkdir()
+                    plugin = self._copy_codex_observation_plugin()
+                    plugin.joinpath(relative_path).write_text(
+                        prefix + deep_array + suffix, encoding="utf-8"
                     )
-                    self.assertEqual(coverage["status"], "partial")
+                    payload = build_toolbox_payload(home=self.home, now=FIXED_NOW)
+
+                    self.assertEqual(
+                        [
+                            (row["code"], row["path"])
+                            for row in payload["scan_errors"]
+                        ],
+                        [(expected_error, f"{package_ref}/{relative_path}")],
+                    )
+                    if expect_depth_message:
+                        self.assertIn(
+                            "maximum JSON nesting depth",
+                            payload["scan_errors"][0]["message"],
+                        )
                     self.assertEqual(
                         [item for item in payload["items"] if item["type"] == asset_type],
                         [],
                     )
+                    if asset_type in {"mcp", "sdk"}:
+                        coverage = next(
+                            row
+                            for row in payload["scan_scope"]["coverage"]
+                            if row["host_id"] == "codex"
+                            and row["asset_type"] == asset_type
+                        )
+                        self.assertEqual(coverage["status"], "partial")
 
     def test_metadata_json_depth_guard_has_an_explicit_boundary(self) -> None:
         at_limit: object = None
@@ -632,6 +655,7 @@ class ToolboxScannerTests(unittest.TestCase):
         allowed = set(item_schema["properties"])
         raw_items = raw["items"]
         raw_ids = [item["asset_id"] for item in raw_items]
+        host_overlay_items = [item for item in raw_items if "translated_from_hash" in item]
 
         self.assertEqual(len(raw_ids), len(set(raw_ids)))
         for item in raw_items:
@@ -643,8 +667,8 @@ class ToolboxScannerTests(unittest.TestCase):
         loaded = _load_overlay(overlay_path, config["limits"], errors)
 
         self.assertEqual(errors, [])
-        self.assertEqual(len(loaded), len(raw_items))
-        self.assertEqual(set(loaded), set(raw_ids))
+        self.assertEqual(len(loaded), len(host_overlay_items))
+        self.assertEqual(set(loaded), {item["asset_id"] for item in host_overlay_items})
         for item in loaded.values():
             self.assertTrue(item["coverage_complete"])
             self.assertRegex(item["translated_from_hash"], r"^[a-f0-9]{64}$")
