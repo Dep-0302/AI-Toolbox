@@ -5,7 +5,7 @@ set -u
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEFAULT_PORT="${TOOLBOX_PORT:-4791}"
 NPM_CACHE_DIR="${TMPDIR:-/tmp}/ai-toolbox-npm-cache-${UID}"
-RELEASE_ID="0.1.0-public"
+RELEASE_ID="0.2.0-public"
 LOCK_STAMP="$ROOT_DIR/.ai-toolbox-lock.sha256"
 
 print_status() {

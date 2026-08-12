@@ -1,0 +1,43 @@
+{
+  "fixture_version": 1,
+  "kind": "project_skill_synthetic_expectations",
+  "global_invariants": {
+    "checked_in_symlink_count": 0,
+    "absolute_path_count": 0,
+    "observed_project_write_count": 0,
+    "network_call_count": 0,
+    "process_execution_count": 0,
+    "body_read_count": 0,
+    "body_sentinel_emit_count": 0,
+    "host_availability": "unverified",
+    "actual_use": "not_connected"
+  },
+  "scenario_summary": {
+    "empty-entry": {"scan_status": "complete", "logical_skill_count": 0, "error_count": 0},
+    "missing-entry": {"scan_status": "complete", "logical_skill_count": 0, "missing_entry_count": 7, "error_count": 0},
+    "five-entities": {"logical_skill_count": 5, "file_observation_count": 5, "binding_evidence_count": 5},
+    "safe-six-frontmatter": {"allowlisted_field_count": 6, "fingerprint_scope": "projection_sha256_v1"},
+    "malicious-frontmatter": {"case_count": 5, "constructor_execution_count": 0, "raw_html_rendered": false},
+    "metadata-limits": {"rejected_case_count": 3, "body_read_count": 0},
+    "marketplace-bait": {"logical_skill_count": 0, "manifest_read_count": 0, "marketplace_content_read_count": 0, "unapproved_plugins_descent_count": 0},
+    "multi-evidence": {"logical_skill_count": 10, "file_observation_count": 16, "binding_evidence_count": 10, "plugin_source_evidence_count": 6},
+    "human-only": {"machine_logical_skill_count": 0, "human_association_count": 1, "machine_state_upgrades": 0},
+    "codex-path-only": {"logical_skill_count": 7, "file_observation_count": 7, "binding_semantics": "observed_path_only", "binding_evidence_count": 0},
+    "container-no-descent": {"project_scan_attempted": false, "nested_project_inference_count": 0, "manifest_read_count": 0},
+    "entry-semantics": {"logical_skill_count": 4, "binding_evidence_count": 3, "source_only_evidence_count": 1},
+    "classification-matrix": {"manifest_read_count": 1, "non_project_deep_read_count": 0},
+    "excluded-boundaries": {"excluded_segment_count": 13, "excluded_manifest_read_count": 0},
+    "path-safety": {"case_count": 9, "unsafe_target_read_count": 0}
+  },
+  "path_safety_outcomes": {
+    "broken-entry-link": "broken",
+    "outside-entry-link": "outside_project",
+    "loop-entry-links": "loop",
+    "descendant-link-skip": "skipped",
+    "observation-root-is-link": "observation_root_symlink",
+    "project-root-is-link": "project_root_symlink",
+    "project-ancestor-is-link": "project_ancestor_symlink",
+    "manifest-toctou-swap": "path_race",
+    "manifest-permission-denied": "permission_denied"
+  }
+}

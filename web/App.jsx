@@ -41,6 +41,9 @@ import {
   HOST_LABELS,
   HOST_ORDER,
   TYPE_LABELS,
+  candidateDescriptionState,
+  candidateDisplayItems,
+  candidateHealthFindings,
   categoriesFor,
   coverageNotice,
   filterAssets,
@@ -66,12 +69,14 @@ import {
   scenarioGuideFor,
 } from './lib/scenarios'
 import collectionTaxonomy from '../registry/collection_taxonomy.json'
+import ProjectSkillsView from './ProjectSkillsView'
 
 const FAVORITES_KEY = 'ai-toolbox-workbench:favorites:v1'
 
 const NAV_ITEMS = [
   { id: 'overview', label: '总览', icon: Grid2X2 },
   { id: 'skills', label: 'Skill 库', icon: Library },
+  { id: 'project-skills', label: '项目 Skill', icon: FolderOpen },
   { id: 'tools', label: 'Plugin 与工具', icon: Plug },
   { id: 'candidates', label: '备选 skill 库', icon: Database },
   { id: 'collections', label: '全部收藏', icon: BookOpen },
@@ -81,6 +86,7 @@ const NAV_ITEMS = [
 const PAGE_TITLES = {
   overview: '能力总览',
   skills: 'Skill 库',
+  'project-skills': '项目 Skill',
   collections: '全部收藏',
   candidates: '备选 skill 库',
   tools: 'Plugin 与工具',
@@ -167,15 +173,23 @@ export default function App() {
   const [collectionSnapshot, setCollectionSnapshot] = useState(null)
   const [collectionScanAttempt, setCollectionScanAttempt] = useState(null)
   const [candidateCatalog, setCandidateCatalog] = useState(null)
+  const [candidateFocusUid, setCandidateFocusUid] = useState(null)
   const [collectionLoading, setCollectionLoading] = useState(false)
   const [collectionChecking, setCollectionChecking] = useState(false)
   const [collectionRefreshing, setCollectionRefreshing] = useState(false)
+  const [projectSkillView, setProjectSkillView] = useState(null)
+  const [projectSkillLoading, setProjectSkillLoading] = useState(false)
+  const [projectSkillLoaded, setProjectSkillLoaded] = useState(false)
+  const [projectSkillRefreshing, setProjectSkillRefreshing] = useState(false)
+  const [projectSkillError, setProjectSkillError] = useState('')
+  const [temporaryProjectSkill, setTemporaryProjectSkill] = useState(null)
   const [folderDialog, setFolderDialog] = useState(null)
   const [sourceSwitching, setSourceSwitching] = useState(false)
   const [notice, setNotice] = useState(null)
   const [favorites, toggleFavorite] = useFavorites()
   const collectionCheckRequestRef = useRef(0)
   const collectionCheckInFlightRef = useRef(false)
+  const projectSkillRequestRef = useRef(0)
   const collectionStartupCheckStartedRef = useRef(false)
   const folderDialogTriggerRef = useRef(null)
 
@@ -204,6 +218,39 @@ export default function App() {
   useEffect(() => {
     loadWorkbench()
   }, [loadWorkbench])
+
+  const loadProjectSkills = useCallback(async () => {
+    const requestId = projectSkillRequestRef.current + 1
+    projectSkillRequestRef.current = requestId
+    setProjectSkillLoading(true)
+    setProjectSkillError('')
+    try {
+      const nextView = await parseResponse(
+        await fetch('/api/project-skills', { cache: 'no-store' }),
+      )
+      if (requestId !== projectSkillRequestRef.current) return false
+      setProjectSkillView(nextView)
+      return nextView
+    } catch (error) {
+      if (requestId !== projectSkillRequestRef.current) return false
+      if (error.status === 404) {
+        setProjectSkillView(null)
+      } else {
+        setProjectSkillError(error.payload?.message || `项目 Skill 观察数据读取失败：${error.message}`)
+      }
+      return false
+    } finally {
+      if (requestId === projectSkillRequestRef.current) {
+        setProjectSkillLoaded(true)
+        setProjectSkillLoading(false)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeView !== 'project-skills' || projectSkillLoaded || projectSkillLoading) return
+    loadProjectSkills()
+  }, [activeView, loadProjectSkills, projectSkillLoaded, projectSkillLoading])
 
   const fetchCandidateCatalog = useCallback(async () => {
     try {
@@ -330,6 +377,60 @@ export default function App() {
     setRefreshing(false)
   }, [health?.csrf_token, refreshing])
 
+  const refreshProjectSkills = useCallback(async () => {
+    if (!health?.csrf_token || projectSkillRefreshing) return
+    setProjectSkillRefreshing(true)
+    setProjectSkillError('')
+    try {
+      const nextSnapshot = await parseResponse(
+        await fetch('/api/project-skills/refresh', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-AI-Toolbox-CSRF': health.csrf_token,
+          },
+          body: '{}',
+        }),
+      )
+      setProjectSkillView((current) => ({
+        ...(current || {}),
+        snapshot: nextSnapshot,
+        last_attempt: null,
+        report: { available: false, generation_id: null, content: null },
+        integrity: {
+          degraded: true,
+          errors: ['last_attempt_missing', 'report_missing'],
+        },
+      }))
+      const reloaded = await loadProjectSkills()
+      setNotice(reloaded
+        ? { tone: 'success', message: '项目 Skill 只读观察已更新；被观察项目未被写入。' }
+        : { tone: 'info', message: '新快照已提交，但完整回执暂未重读；当前显示本次机器快照。' })
+    } catch (error) {
+      const reloaded = await loadProjectSkills()
+      const hasCompleteSnapshot = Boolean(reloaded?.snapshot || projectSkillView?.snapshot)
+      const hasIncompleteReceipt = Boolean(
+        reloaded?.last_attempt && reloaded.last_attempt.scan_status !== 'complete',
+      )
+      const message = error.status === 409
+        ? hasCompleteSnapshot
+          ? '另一次项目 Skill 观察正在进行，已继续显示最后完整快照。'
+          : '另一次项目 Skill 观察正在进行；当前尚无完整快照。'
+        : error.status === 422
+          ? hasCompleteSnapshot
+            ? hasIncompleteReceipt
+              ? '本次观察未完整，已保留上一份完整快照并显示失败回执。'
+              : '本次观察未完整，已保留上一份完整快照；失败回执暂未重读。'
+            : hasIncompleteReceipt
+              ? '本次观察未完整，尚未建立可保留的完整快照；失败回执仍可查看。'
+              : '本次观察未完整，尚无完整快照；失败回执暂未重读。'
+          : error.payload?.message || `项目 Skill 观察失败：${error.message}`
+      setProjectSkillError(message)
+    } finally {
+      setProjectSkillRefreshing(false)
+    }
+  }, [health?.csrf_token, loadProjectSkills, projectSkillRefreshing, projectSkillView?.snapshot])
+
   const refreshCollections = useCallback(async () => {
     if (!health?.csrf_token || collectionRefreshing || collectionChecking || sourceSwitching) return
     setCollectionRefreshing(true)
@@ -364,7 +465,7 @@ export default function App() {
 
   const sourceSession = health?.source_session || {
     mode: 'default',
-    display_path: collectionSnapshot?.source_root || '',
+    display_path: '',
     source_key: 'default',
   }
   const folderPicker = health?.folder_picker || {
@@ -396,12 +497,21 @@ export default function App() {
             'Content-Type': 'application/json',
             'X-AI-Toolbox-CSRF': health.csrf_token,
           },
-          body: JSON.stringify({ target: 'collection-source' }),
+          body: JSON.stringify({
+            target: folderDialog?.context === 'project-skills'
+              ? 'project-skill-source'
+              : 'collection-source',
+          }),
         }),
       )
       if (!payload.selected) {
         setFolderDialog(null)
-        setNotice({ tone: 'info', message: '已取消选择，当前收藏来源和索引均未改变。' })
+        setNotice({
+          tone: 'info',
+          message: folderDialog?.context === 'project-skills'
+            ? '已取消选择，当前项目与项目 Skill 观察均未改变。'
+            : '已取消选择，当前收藏来源和索引均未改变。',
+        })
         window.setTimeout(() => folderDialogTriggerRef.current?.focus?.(), 0)
         return
       }
@@ -421,15 +531,18 @@ export default function App() {
     } finally {
       setSourceSwitching(false)
     }
-  }, [folderPicker.available, health?.csrf_token, sourceSwitching])
+  }, [folderDialog?.context, folderPicker.available, health?.csrf_token, sourceSwitching])
 
   const confirmFolder = useCallback(async () => {
     if (!health?.csrf_token || sourceSwitching || !folderDialog?.selectionToken) return
     setSourceSwitching(true)
     setFolderDialog((current) => current ? { ...current, error: '' } : current)
     try {
+      const projectSkillContext = folderDialog.context === 'project-skills'
       const payload = await parseResponse(
-        await fetch('/api/folder-selection/confirm', {
+        await fetch(projectSkillContext
+          ? '/api/project-skills/folder-selection/confirm'
+          : '/api/folder-selection/confirm', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -438,17 +551,23 @@ export default function App() {
           body: JSON.stringify({ selection_token: folderDialog.selectionToken }),
         }),
       )
-      collectionCheckRequestRef.current += 1
-      collectionCheckInFlightRef.current = false
-      setCollectionSnapshot(payload.collection_snapshot || null)
-      setCollectionScanAttempt(null)
-      setCandidateCatalog(payload.candidate_catalog || null)
-      setSelectedCollectionEntry(null)
-      setHealth((current) => ({ ...(current || {}), source_session: payload.source_session }))
+      if (projectSkillContext) {
+        setTemporaryProjectSkill(payload)
+      } else {
+        collectionCheckRequestRef.current += 1
+        collectionCheckInFlightRef.current = false
+        setCollectionSnapshot(payload.collection_snapshot || null)
+        setCollectionScanAttempt(null)
+        setCandidateCatalog(payload.candidate_catalog || null)
+        setSelectedCollectionEntry(null)
+        setHealth((current) => ({ ...(current || {}), source_session: payload.source_session }))
+      }
       setFolderDialog(null)
       setNotice({
         tone: 'success',
-        message: '已为本次本地服务会话切换收藏来源；“全部收藏”与“备选 Skill 库”已使用同一份只读索引。',
+        message: projectSkillContext
+          ? '已读取所选文件夹中的项目 Skill；仅在当前页面临时展示，未加入登记或写回项目。'
+          : '已为本次本地服务会话切换收藏来源；“全部收藏”与“备选 Skill 库”已使用同一份只读索引。',
       })
       window.setTimeout(() => folderDialogTriggerRef.current?.focus?.(), 0)
     } catch (error) {
@@ -459,7 +578,7 @@ export default function App() {
     } finally {
       setSourceSwitching(false)
     }
-  }, [folderDialog?.selectionToken, health?.csrf_token, sourceSwitching])
+  }, [folderDialog?.context, folderDialog?.selectionToken, health?.csrf_token, sourceSwitching])
 
   const restoreDefaultSource = useCallback(async () => {
     if (!health?.csrf_token || sourceSwitching || sourceSession.mode === 'default') return
@@ -511,6 +630,29 @@ export default function App() {
   )
   const hosts = useMemo(() => hostStats(snapshot), [snapshot])
   const groups = useMemo(() => issueGroups(findings), [findings])
+  const candidateScope = useMemo(() => {
+    const candidateSource = typeof candidateCatalog?.source_dir === 'string'
+      ? candidateCatalog.source_dir
+      : ''
+    const collectionSource = typeof collectionSnapshot?.source_root === 'string'
+      ? collectionSnapshot.source_root
+      : ''
+    if (!candidateCatalog || !Array.isArray(candidateCatalog.items) || !candidateSource || !collectionSource) {
+      return { status: 'unavailable', candidateSource, collectionSource }
+    }
+    if (candidateSource !== collectionSource) {
+      return { status: 'mismatch', candidateSource, collectionSource }
+    }
+    return { status: 'ready', candidateSource, collectionSource }
+  }, [candidateCatalog, collectionSnapshot?.source_root])
+  const candidateFindings = useMemo(
+    () => candidateScope.status === 'ready' ? candidateHealthFindings(candidateCatalog) : [],
+    [candidateCatalog, candidateScope.status],
+  )
+  const healthGroups = useMemo(
+    () => issueGroups([...findings, ...candidateFindings]),
+    [candidateFindings, findings],
+  )
   const filteredSkills = useMemo(
     () =>
       filterAssets(items, {
@@ -564,6 +706,13 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
+  const selectCandidateFinding = useCallback((candidateUid) => {
+    setCandidateFocusUid(candidateUid)
+    navigate('candidates')
+  }, [navigate])
+
+  const clearCandidateFocus = useCallback(() => setCandidateFocusUid(null), [])
+
   const selectHost = useCallback(
     (hostId) => {
       setHostFilter((current) => (current === hostId ? '' : hostId))
@@ -611,15 +760,30 @@ export default function App() {
           onMenu={() => setMobileMenu(true)}
           onRefresh={refresh}
           refreshing={refreshing}
-          snapshot={snapshot}
+          snapshot={activeView === 'project-skills' ? projectSkillView?.snapshot : snapshot}
           onBoundary={() => setShowBoundary(true)}
           candidateMode={activeView === 'candidates'}
           collectionMode={activeView === 'collections'}
+          projectSkillMode={activeView === 'project-skills'}
         />
 
         <div className="workspace-content">
           {notice && <Notice tone={notice.tone}>{notice.message}</Notice>}
-          {activeView === 'collections' ? (
+          {activeView === 'project-skills' ? (
+            <ProjectSkillsView
+              snapshot={projectSkillView?.snapshot || null}
+              attempt={projectSkillView?.last_attempt || null}
+              integrity={projectSkillView?.integrity || null}
+              report={projectSkillView?.report || null}
+              loading={projectSkillLoading}
+              refreshing={projectSkillRefreshing}
+              error={projectSkillError}
+              onRefresh={refreshProjectSkills}
+              onReload={loadProjectSkills}
+              temporaryProjectSkill={temporaryProjectSkill}
+              onChooseOtherFolder={(trigger) => openFolderDialog('project-skills', trigger)}
+            />
+          ) : activeView === 'collections' ? (
             <CollectionsView
               snapshot={collectionSnapshot}
               scanAttempt={collectionScanAttempt}
@@ -702,6 +866,8 @@ export default function App() {
                   sourceBusy={sourceSwitching}
                   onChooseSource={openFolderDialog}
                   onRestoreSource={restoreDefaultSource}
+                  focusUid={candidateFocusUid}
+                  onFocusHandled={clearCandidateFocus}
                 />
               )}
               {activeView === 'tools' && (
@@ -731,10 +897,14 @@ export default function App() {
               )}
               {activeView === 'health' && (
                 <HealthView
-                  groups={groups}
+                  groups={healthGroups}
                   snapshot={snapshot}
                   items={items}
+                  candidateCatalog={candidateCatalog}
+                  candidateFindings={candidateFindings}
+                  candidateScope={candidateScope}
                   onSelectItem={setSelectedItem}
+                  onSelectCandidate={selectCandidateFinding}
                   onBoundary={() => setShowBoundary(true)}
                 />
               )}
@@ -840,6 +1010,7 @@ function Topbar({
   onBoundary,
   candidateMode,
   collectionMode,
+  projectSkillMode,
 }) {
   return (
     <header className={candidateMode ? 'topbar candidate-topbar' : 'topbar'}>
@@ -854,12 +1025,12 @@ function Topbar({
           )}
         </div>
       </div>
-      {candidateMode ? (
+      {candidateMode || projectSkillMode ? (
         <div className="candidate-topbar-context">
-          <Database size={17} aria-hidden="true" />
-          <span>收藏夹决策区</span>
+          {projectSkillMode ? <FolderOpen size={17} aria-hidden="true" /> : <Database size={17} aria-hidden="true" />}
+          <span>{projectSkillMode ? '项目内只读证据' : '收藏夹决策区'}</span>
           <i aria-hidden="true" />
-          <small>留 / 砍 / 并</small>
+          <small>{projectSkillMode ? '不代表已加载或可调用' : '留 / 砍 / 并'}</small>
         </div>
       ) : (
         <label className="global-search">
@@ -878,11 +1049,13 @@ function Topbar({
         </label>
       )}
       <div className="topbar-actions">
-        <button className="secondary-button info-button" onClick={onBoundary}>
-          <Info size={17} />
-          <span>{candidateMode || collectionMode ? '边界说明' : '观察说明'}</span>
-        </button>
-        {!candidateMode && !collectionMode && (
+        {!projectSkillMode && (
+          <button className="secondary-button info-button" onClick={onBoundary}>
+            <Info size={17} />
+            <span>{candidateMode || collectionMode ? '边界说明' : '观察说明'}</span>
+          </button>
+        )}
+        {!candidateMode && !collectionMode && !projectSkillMode && (
           <>
             <button className="refresh-button" onClick={onRefresh} disabled={refreshing}>
               <RefreshCw size={17} className={refreshing ? 'spin' : ''} />
@@ -913,7 +1086,12 @@ function FolderSourceDialog({ state, picker, busy, onChoose, onConfirm, onClose 
   const dialogRef = useRef(null)
   const closeRef = useRef(null)
   const candidateContext = state.context === 'candidates'
-  const title = candidateContext ? '为备选 Skill 库选择收藏文件夹' : '为全部收藏选择文件夹'
+  const projectSkillContext = state.context === 'project-skills'
+  const title = projectSkillContext
+    ? '选择其他项目文件夹'
+    : candidateContext
+      ? '为备选 Skill 库选择收藏文件夹'
+      : '为全部收藏选择文件夹'
 
   useEffect(() => {
     closeRef.current?.focus()
@@ -942,9 +1120,11 @@ function FolderSourceDialog({ state, picker, busy, onChoose, onConfirm, onClose 
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [busy, onClose])
 
-  const description = candidateContext
-    ? '此页只识别所选目录中可评估的 Skill 包，用于留／砍／并；确认后同一目录也会成为本次会话的“全部收藏”来源。'
-    : '默认只读盘点当前收藏目录。只有在收藏位于其他目录，或想临时盘点另一批资料时，才需要切换。'
+  const description = projectSkillContext
+    ? '选择一个位于“文稿”观察根内的具体项目文件夹。本页只读取该项目批准的 Skill 入口，并临时展示结果。'
+    : candidateContext
+      ? '此页只识别所选目录中可评估的 Skill 包，用于留／砍／并；确认后同一目录也会成为本次会话的“全部收藏”来源。'
+      : '默认只读盘点当前收藏目录。只有在收藏位于其他目录，或想临时盘点另一批资料时，才需要切换。'
 
   return (
     <div
@@ -973,11 +1153,14 @@ function FolderSourceDialog({ state, picker, busy, onChoose, onConfirm, onClose 
 
         {state.step === 'confirm' ? (
           <div className="folder-dialog-confirm" id="folder-dialog-description">
-            <p>系统选择器已返回以下目录。请核对后再建立只读索引：</p>
+            <p>系统选择器已返回以下目录。请核对后再{projectSkillContext ? '读取项目 Skill' : '建立只读索引'}：</p>
             <code>{state.displayPath}</code>
             <div className="folder-dialog-safety">
               <ShieldCheck size={18} />
-              <span>只有“全部收藏”和“备选 Skill 库”两份索引都成功且来源一致时才会切换。默认快照不会被覆盖。</span>
+              <span>{projectSkillContext
+                ? '结果只保留在当前页面内存中，不加入项目登记、不覆盖完整快照，也不写回所选文件夹。'
+                : '只有“全部收藏”和“备选 Skill 库”两份索引都成功且来源一致时才会切换。默认快照不会被覆盖。'}
+              </span>
             </div>
           </div>
         ) : state.step === 'picking' ? (
@@ -995,7 +1178,10 @@ function FolderSourceDialog({ state, picker, busy, onChoose, onConfirm, onClose 
             <dl>
               <div>
                 <dt>会读取什么</dt>
-                <dd>文件名、目录结构、有限元数据、可识别清单，以及受大小和数量上限保护的包内清单。</dd>
+                <dd>{projectSkillContext
+                  ? '固定 Skill 入口、SKILL.md 的受限 frontmatter，以及同项目内安全链接关系；不读取正文。'
+                  : '文件名、目录结构、有限元数据、可识别清单，以及受大小和数量上限保护的包内清单。'}
+                </dd>
               </div>
               <div>
                 <dt>不会做什么</dt>
@@ -1003,10 +1189,16 @@ function FolderSourceDialog({ state, picker, busy, onChoose, onConfirm, onClose 
               </div>
               <div>
                 <dt>影响范围</dt>
-                <dd>只影响当前本地服务会话中的两个页面；重启服务或点击“恢复默认”后回到默认来源。</dd>
+                <dd>{projectSkillContext
+                  ? '只在当前“项目 Skill”页面临时增加一个可选项目；不加入项目登记，刷新页面后回到登记项目。'
+                  : '只影响当前本地服务会话中的两个页面；重启服务或点击“恢复默认”后回到默认来源。'}
+                </dd>
               </div>
             </dl>
-            <p className="folder-dialog-caution">请选择尽可能小、专门存放收藏或备选 Skill 的目录；不要选择整个个人目录、桌面、文稿或系统目录。</p>
+            <p className="folder-dialog-caution">{projectSkillContext
+              ? '请选择具体项目文件夹；整个个人目录、桌面、文稿根目录、系统目录和敏感目录都会被拒绝。'
+              : '请选择尽可能小、专门存放收藏或备选 Skill 的目录；不要选择整个个人目录、桌面、文稿或系统目录。'}
+            </p>
             {!picker.available && (
               <Notice tone="error">{picker.reason || '当前本地环境不支持系统文件夹选择器。'}</Notice>
             )}
@@ -1019,7 +1211,9 @@ function FolderSourceDialog({ state, picker, busy, onChoose, onConfirm, onClose 
           {state.step === 'confirm' ? (
             <button className="refresh-button" onClick={onConfirm} disabled={busy || !state.selectionToken}>
               <ShieldCheck size={17} />
-              {busy ? '正在建立两份索引…' : '确认并建立只读索引'}
+              {busy
+                ? projectSkillContext ? '正在读取项目 Skill…' : '正在建立两份索引…'
+                : projectSkillContext ? '确认并读取项目 Skill' : '确认并建立只读索引'}
             </button>
           ) : (
             <button className="refresh-button" onClick={onChoose} disabled={busy || !picker.available}>
@@ -1978,6 +2172,7 @@ function CollectionsView({
   const candidateSourceMismatch = Boolean(
     snapshot && candidateCatalog && candidateCatalog.source_dir !== snapshot.source_root,
   )
+  const sourceDisplayPath = sourceSession?.display_path || '来源路径未提供'
   const scenarios = useMemo(
     () => [...new Set(
       entries
@@ -2107,7 +2302,7 @@ function CollectionsView({
       <div className="collection-source-line">
         <ShieldCheck size={17} />
         <span>只读来源 · {sourceSession?.mode === 'temporary' ? '临时自选' : '默认目录'}</span>
-        <code>{sourceSession?.display_path || snapshot.source_root}</code>
+        <code>{sourceDisplayPath}</code>
         <small>启动时已检查 · {formatTimestamp(snapshot.generated_at)}</small>
         {sourceSession?.mode === 'temporary' && (
           <button className="source-restore-button" onClick={onRestoreSource} disabled={sourceBusy}>
@@ -2178,14 +2373,14 @@ function CollectionsView({
         context="attempt"
         errors={scanAttempt?.scan_errors}
         entries={entries}
-        sourceRoot={snapshot.source_root}
+        sourceRoot={sourceDisplayPath}
         onSelectEntry={onSelectEntry}
       />
 
       <CollectionScanNotice
         errors={snapshot.scan_errors}
         entries={entries}
-        sourceRoot={snapshot.source_root}
+        sourceRoot={sourceDisplayPath}
         onSelectEntry={onSelectEntry}
       />
 
@@ -2665,7 +2860,7 @@ function CollectionSourceDrawer({ entry, onClose }) {
 // 决策与中文审校：只存浏览器 localStorage，不改动收藏夹；导入导出 decisions.json
 const CANDIDATES_LS_KEY = 'skill-workbench:decisions:v1'
 const CANDIDATE_BUCKETS = ['训练与测试', '知识库', '范例库', '模板', '参考资料', '素材', '脚本']
-const CANDIDATE_ZH_LABEL = { missing: '待补中文', stale: '中文已过期', ai_draft: '中文草稿', reviewed: '中文已确认' }
+const CANDIDATE_ZH_LABEL = { missing: '待补中文', stale: '中文说明待复核', ai_draft: '中文草稿', reviewed: '中文已确认' }
 const CANDIDATE_V_ORDER = { pending: 0, keep: 1, merge: 2, drop: 3 }
 const CANDIDATE_FSEC = [['platform', '平台'], ['inputs', '输入'], ['outputs', '产出'], ['zh_state', '中文状态'], ['has', '特征']]
 const CANDIDATE_DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype'])
@@ -2770,6 +2965,8 @@ function CandidatesView({
   sourceBusy,
   onChooseSource,
   onRestoreSource,
+  focusUid,
+  onFocusHandled,
 }) {
   const sourceKey = sourceSession?.source_key || 'default'
   const [catalog, setCatalog] = useState(initialCatalog || null)
@@ -2845,18 +3042,73 @@ function CandidatesView({
     candidatesSaveLS(nextDecisions, nextOverrides, sourceKey)
   }, [sourceKey])
 
-  const items = catalog?.items || []
+  const catalogInvalid = Boolean(catalog && !Array.isArray(catalog.items))
+  const items = useMemo(() => candidateDisplayItems(catalog), [catalog])
+  const candidateSourceDir = typeof catalog?.source_dir === 'string' ? catalog.source_dir : ''
+  const currentCollectionSource = typeof collectionSourceRoot === 'string' ? collectionSourceRoot : ''
+  const sourceDisplayPath = sourceSession?.display_path || '来源路径未提供'
   const sourceMismatch = Boolean(
-    catalog && collectionSourceRoot && catalog.source_dir !== collectionSourceRoot,
+    catalog && currentCollectionSource && candidateSourceDir !== currentCollectionSource,
   )
   const byUid = useMemo(
-    () => candidateOwnMap(items
-      .filter((item) => typeof item.uid === 'string' && !CANDIDATE_DANGEROUS_KEYS.has(item.uid))
-      .map((item) => [item.uid, item])),
+    () => candidateOwnMap(items.map((item) => [item.uid, item])),
     [items],
   )
-  const groups = catalog?.groups || []
-  const facets = catalog?.facets || {}
+
+  useEffect(() => {
+    if (!focusUid || !catalog) return
+    if (!sourceMismatch && Object.hasOwn(byUid, focusUid)) setSelectedUid(focusUid)
+    onFocusHandled?.()
+  }, [byUid, catalog, focusUid, onFocusHandled, sourceMismatch])
+
+  const groups = useMemo(() => {
+    if (!Array.isArray(catalog?.groups)) return []
+    const seenNames = new Set()
+    return catalog.groups.flatMap((group) => {
+      if (!group || typeof group !== 'object' || Array.isArray(group)) return []
+      const name = typeof group.name === 'string' ? group.name.trim().slice(0, 240) : ''
+      if (!name || seenNames.has(name) || CANDIDATE_DANGEROUS_KEYS.has(name)) return []
+      seenNames.add(name)
+      return [{
+        ...group,
+        name,
+        desc: typeof group.desc === 'string' ? group.desc.slice(0, 2000) : '',
+        competing: Boolean(group.competing),
+      }]
+    })
+  }, [catalog])
+  const facets = useMemo(() => {
+    const sourceFacets = catalog?.facets && typeof catalog.facets === 'object'
+      ? catalog.facets
+      : {}
+    const safeFacet = (dimension) => {
+      if (!Array.isArray(sourceFacets[dimension])) return []
+      const seenValues = new Set()
+      return sourceFacets[dimension].flatMap((entry) => {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return []
+        const value = typeof entry.value === 'string' ? entry.value.trim().slice(0, 240) : ''
+        if (!value || seenValues.has(value) || CANDIDATE_DANGEROUS_KEYS.has(value)) return []
+        seenValues.add(value)
+        return [{ value, count: Number.isFinite(entry.count) && entry.count >= 0 ? entry.count : 0 }]
+      })
+    }
+    const existingHas = Array.isArray(sourceFacets.has)
+      ? safeFacet('has').filter((entry) => !['简介有问题', '简介解析异常', '简介已截短'].includes(entry.value))
+      : []
+    const parsingErrorCount = items.filter((item) => candidateDescriptionState(item).parsingError).length
+    const truncatedCount = items.filter((item) => candidateDescriptionState(item).truncated).length
+    return {
+      platform: safeFacet('platform'),
+      inputs: safeFacet('inputs'),
+      outputs: safeFacet('outputs'),
+      zh_state: safeFacet('zh_state'),
+      has: [
+        ...existingHas,
+        ...(parsingErrorCount ? [{ value: '简介解析异常', count: parsingErrorCount }] : []),
+        ...(truncatedCount ? [{ value: '简介已截短', count: truncatedCount }] : []),
+      ],
+    }
+  }, [catalog, items])
   const maxc = items.length ? Math.max(...items.map((x) => x.chars)) : 1
 
   const ov = useCallback(
@@ -2971,7 +3223,15 @@ function CandidatesView({
     if (f.inputs.size && !inputsOf(x).some((v) => f.inputs.has(v))) return false
     if (f.outputs.size && !outputsOf(x).some((v) => f.outputs.has(v))) return false
     if (f.zh_state.size && !f.zh_state.has(zhStateOf(x))) return false
-    if (f.has.size && ![...f.has].some((v) => x.tags.includes(v))) return false
+    if (f.has.size) {
+      const descriptionState = candidateDescriptionState(x)
+      const matchesFeature = [...f.has].some((value) => {
+        if (value === '简介解析异常') return descriptionState.parsingError
+        if (value === '简介已截短') return descriptionState.truncated
+        return x.tags?.includes(value)
+      })
+      if (!matchesFeature) return false
+    }
     if (onlyPending && verdictOf(x.uid) !== 'pending') return false
     return true
   }, [filters, onlyPending, platformOf, inputsOf, outputsOf, zhStateOf, verdictOf])
@@ -3099,6 +3359,19 @@ function CandidatesView({
     })
   }, [])
 
+  if (catalogInvalid) {
+    return (
+      <section className="candidates-view">
+        <EmptyState
+          icon={CircleAlert}
+          title="备选库数据格式不完整"
+          detail="当前候选快照没有合法的 items 数组，已停止展示并且未纳入系统体检。"
+          action={refreshingCatalog ? '刷新中…' : '刷新候选数据'}
+          onAction={refreshCatalog}
+        />
+      </section>
+    )
+  }
   if (loadError) {
     return (
       <section className="candidates-view">
@@ -3181,7 +3454,7 @@ function CandidatesView({
       <div className="candidate-source-line">
         <ShieldCheck size={17} />
         <span>只读来源 · {sourceSession?.mode === 'temporary' ? '临时自选' : '默认目录'}</span>
-        <code>{sourceSession?.display_path || catalog.source_dir}</code>
+        <code>{sourceDisplayPath}</code>
         {sourceSession?.mode === 'temporary' && (
           <button className="source-restore-button" onClick={onRestoreSource} disabled={sourceBusy}>恢复默认</button>
         )}
@@ -3387,6 +3660,7 @@ function CandidatesView({
 function CandidateCard({ item, verdict, decision, titleOf, sumOf, platformOf, zhStateOf, isOv, maxc, selected, mergeTargets, onOpen, onToggleCompare, onVerdict }) {
   const x = item
   const v = verdict
+  const descriptionState = candidateDescriptionState(x)
   const [showMerge, setShowMerge] = useState(false)
   const mergeTarget = decision?.merge_into
   return (
@@ -3397,13 +3671,14 @@ function CandidateCard({ item, verdict, decision, titleOf, sumOf, platformOf, zh
         <span className="candidate-card-desc">{sumOf(x) || x.desc}</span>
         <span className="candidate-card-tags">
           {zhStateOf(x) === 'missing' && <span className="cand-tag is-warn">待补中文</span>}
-          {zhStateOf(x) === 'stale' && <span className="cand-tag is-warn">中文已过期</span>}
+          {zhStateOf(x) === 'stale' && <span className="cand-tag is-warn">中文说明待复核</span>}
           {zhStateOf(x) === 'reviewed' && <span className="cand-tag is-ok">中文已确认</span>}
           {platformOf(x).slice(0, 3).map((p) => <span key={p} className={`cand-tag${isOv('platform') ? ' is-ov' : ''}`}>{p}</span>)}
-          {x.tags.includes('含脚本') && <span className="cand-tag">含脚本</span>}
+          {x.tags?.includes('含脚本') && <span className="cand-tag">含脚本</span>}
           {x.installed?.hosts?.length > 0 && <span className="cand-tag is-inst">已装 · {x.installed.hosts.join(' ')}</span>}
           {x.copies > 1 && <span className="cand-tag">{x.copies} 份副本</span>}
-          {x.tags.includes('简介有问题') && <span className="cand-tag is-warn">简介有问题</span>}
+          {descriptionState.parsingError && <span className="cand-tag is-warn">简介解析异常</span>}
+          {descriptionState.truncated && <span className="cand-tag">简介已截短</span>}
         </span>
         <span className="candidate-card-meter"><i style={{ width: `${Math.round(x.chars / (maxc || 1) * 100)}%` }} /></span>
       </button>
@@ -3445,6 +3720,7 @@ function CandidateCard({ item, verdict, decision, titleOf, sumOf, platformOf, zh
 function CandidateDrawer({ item, decision, override, byUid, facets, validMergeTargets, onClose, onVerdict, onNote, onOverride, onGoto }) {
   const x = item
   const v = decision?.verdict || 'pending'
+  const descriptionState = candidateDescriptionState(x)
   const [showMerge, setShowMerge] = useState(false)
   const zhState = override.zh_reviewed ? 'reviewed' : x.zh_state
   const guessRow = (field, label, current) => {
@@ -3514,10 +3790,20 @@ function CandidateDrawer({ item, decision, override, byUid, facets, validMergeTa
           </DrawerSection>
 
           <DrawerSection title="完整简介（原文）">
-            {x.desc_flags?.includes('desc_broken')
-              ? <p style={{ color: '#946000' }}>⚠️ 这个包的简介字段是坏的，需要点开原包看正文</p>
+            {descriptionState.parsingError
+              ? <p style={{ color: '#946000' }}>⚠️ 这个包的简介解析异常，需要点开原包核对正文</p>
               : <p>{x.desc_full || x.desc || ''}</p>}
-            {x.zh_state === 'stale' && <p style={{ marginTop: 6, color: '#946000' }}>原包内容已变更，这段译文可能过时</p>}
+            {x.zh_state === 'stale' && (
+              <p style={{ marginTop: 6, color: '#946000' }}>
+                候选快照中的原包内容已变更，中文说明待复核
+                {override.zh_reviewed ? '；当前浏览器已标记确认，但尚未回写候选快照' : ''}
+              </p>
+            )}
+            {x.zh_state === 'missing' && override.zh_reviewed && (
+              <p style={{ marginTop: 6, color: '#946000' }}>
+                候选快照仍记录为中文说明缺失；当前浏览器的确认尚未回写候选快照
+              </p>
+            )}
           </DrawerSection>
 
           <DrawerSection title="中文审校（改动只进 decisions，不回写元数据）">
@@ -3548,7 +3834,7 @@ function CandidateDrawer({ item, decision, override, byUid, facets, validMergeTa
                 {override.zh_reviewed ? '已确认'
                   : (override.zh_name != null || override.zh_sum != null) ? '已修改，待确认'
                   : zhState === 'ai_draft' ? 'AI 草稿，未确认'
-                  : zhState === 'stale' ? '译文已过期'
+                  : zhState === 'stale' ? '中文说明待复核'
                   : zhState === 'missing' ? '待补中文' : ''}
               </span>
             </div>
@@ -3867,7 +4153,7 @@ function AssetCard({ item, favorite, findingCount, onSelect, onFavorite, showSub
             const observed = bindings.some((binding) => binding.host_id === hostId)
             return (
               <span key={hostId} className={observed ? 'observed' : ''} title={`${HOST_LABELS[hostId]}：${observed ? '已启用' : '未启用'}`}>
-                <span aria-hidden="true">{HOST_LABELS[hostId]?.slice(0, 1) || '?'}</span>
+                <span className="host-initial" aria-hidden="true">{HOST_LABELS[hostId].slice(0, 1)}</span>
               </span>
             )
           })}
@@ -3881,17 +4167,35 @@ function AssetCard({ item, favorite, findingCount, onSelect, onFavorite, showSub
 }
 
 function HostMark({ hostId }) {
+  const label = HOST_LABELS[hostId] || hostId
   return (
-    <span className={`host-mark host-${hostId}`} title={HOST_LABELS[hostId] || hostId}>
-      <span aria-hidden="true">{HOST_LABELS[hostId]?.slice(0, 1) || '?'}</span>
+    <span className={`host-mark host-${hostId}`} title={label} aria-label={label}>
+      <span className="host-initial" aria-hidden="true">{label.slice(0, 1).toUpperCase()}</span>
     </span>
   )
 }
 
-function HealthView({ groups, snapshot, items, onSelectItem, onBoundary }) {
+function HealthView({
+  groups,
+  snapshot,
+  items,
+  candidateCatalog,
+  candidateFindings,
+  candidateScope,
+  onSelectItem,
+  onSelectCandidate,
+  onBoundary,
+}) {
   const errors = snapshot.scan_errors || []
   const lookup = new Map(items.map((item) => [item.asset_id, item]))
   const { attention, designNotes } = splitAttention(groups)
+  const totalFindingCount = countFindings(groups)
+  const hostFindingCount = snapshot.health_findings?.length || 0
+  const candidateFindingCount = candidateFindings.length
+  const candidateScopeReady = candidateScope.status === 'ready'
+  const candidateScopeLabel = candidateScope.status === 'mismatch'
+    ? '候选来源不一致'
+    : '候选范围未载入'
   const designNoteCount = countFindings(designNotes)
   const warningCount = attention
     .filter((group) => group.severity === 'warning')
@@ -3904,13 +4208,34 @@ function HealthView({ groups, snapshot, items, onSelectItem, onBoundary }) {
       <div className="view-intro health-intro">
         <div>
           <p className="section-kicker">观察事实，不是可用性认证</p>
-          <h2>{snapshot.summary?.health_finding_count || 0} 条体检记录</h2>
-          <p>按问题类型聚合，逐项回到受影响资产和观察路径；首版不提供自动修复。</p>
+          <h2>{totalFindingCount} 条体检记录</h2>
+          <p>按宿主观察与候选质检聚合，逐项回到原对象；不提供自动修复。</p>
+          <div className="health-scope-summary" aria-label="体检数据范围">
+            <span>
+              <b>宿主 {hostFindingCount} 条</b>
+              <small>生成于 {formatTimestamp(snapshot.generated_at)}</small>
+            </span>
+            <span className={candidateScopeReady ? '' : 'is-missing'}>
+              <b>{candidateScopeReady ? `候选 ${candidateFindingCount} 条` : candidateScopeLabel}</b>
+              <small>
+                {candidateScopeReady
+                  ? `生成于 ${formatTimestamp(candidateCatalog?.generated_at)}`
+                  : '未纳入当前体检总数'}
+              </small>
+            </span>
+          </div>
         </div>
         <button className="secondary-button" onClick={onBoundary}>
-          <ShieldCheck size={17} /> 查看扫描边界
+          <ShieldCheck size={17} /> 查看数据与扫描边界
         </button>
       </div>
+      {!candidateScopeReady && (
+        <Notice tone="info">
+          {candidateScope.status === 'mismatch'
+            ? '候选快照与当前收藏来源不一致，已按边界排除；当前总数只包含宿主体检，未触发额外扫描。'
+            : '候选快照或当前收藏来源尚未载入；当前总数只包含宿主体检，未触发额外扫描。'}
+        </Notice>
+      )}
       <div className="health-summary-grid">
         <article>
           <span className="finding-icon severity-error"><CircleAlert size={18} /></span>
@@ -3954,13 +4279,27 @@ function HealthView({ groups, snapshot, items, onSelectItem, onBoundary }) {
               <div className="finding-rows">
                 {group.findings.map((finding, index) => {
                   const item = lookup.get(finding.asset_id)
+                  const candidateUid = finding.scope === 'candidate' ? finding.candidate_uid : null
+                  const canOpen = Boolean(item || candidateUid)
+                  const openFinding = () => {
+                    if (item) onSelectItem(item)
+                    else if (candidateUid) onSelectCandidate(candidateUid)
+                  }
                   return (
-                    <button key={`${finding.code}-${finding.asset_id || index}-${index}`} onClick={() => item && onSelectItem(item)} disabled={!item}>
+                    <button
+                      key={`${finding.code}-${finding.asset_id || candidateUid || index}-${index}`}
+                      onClick={openFinding}
+                      disabled={!canOpen}
+                    >
                       <span>
                         <strong>{item ? itemLabel(item) : finding.title || group.title}</strong>
-                        <small>{finding.detail || finding.path || '该记录没有附加说明。'}</small>
+                        <small>
+                          {finding.detail || finding.path || '该记录没有附加说明。'}
+                          {candidateUid && finding.path ? ` · ${finding.path}` : ''}
+                        </small>
                       </span>
-                      {item && <ChevronRight size={16} />}
+                      {candidateUid && <em className="finding-scope-badge">候选</em>}
+                      {canOpen && <ChevronRight size={16} />}
                     </button>
                   )
                 })}
@@ -4118,7 +4457,7 @@ function BoundaryDrawer({ snapshot, health, onClose }) {
           <div className="boundary-hero">
             <span><LockKeyhole size={24} /></span>
             <h2>只读能力检索台</h2>
-            <p>宿主能力只在主动刷新时扫描；全部收藏只在工作台启动时检查一次文件元数据，之后由手动刷新触发；服务停掉后没有后台进程继续观察。</p>
+            <p>宿主能力只在主动刷新时扫描；同源候选质检只投影已载入的候选快照，不把收藏根加入宿主扫描。全部收藏只在工作台启动时检查一次文件元数据，之后由手动刷新触发；服务停掉后没有后台进程继续观察。</p>
           </div>
           <DrawerSection title="硬边界">
             <div className="boundary-checks">

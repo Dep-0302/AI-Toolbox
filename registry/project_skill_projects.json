@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "registry_id": "project-skill-projects-v1",
+  "observation_boundary_ref": "project-skill-observation-boundary-v1",
+  "confirmed_on": "1970-01-01",
+  "projects": []
+}

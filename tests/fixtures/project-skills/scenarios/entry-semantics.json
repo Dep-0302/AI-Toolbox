@@ -1,0 +1,33 @@
+{
+  "scenario_version": 1,
+  "id": "entry-semantics",
+  "project": {
+    "project_id": "fixture-entry-semantics",
+    "relative_path": "fixture-entry-semantics",
+    "classification": "project"
+  },
+  "templates": {
+    "minimal_manifest": "---\nname: {{name}}\ndescription: Synthetic entry semantics fixture.\n---\n"
+  },
+  "nodes": [
+    {"type": "file", "path": "fixture-entry-semantics/.claude/skills/claude-one/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "claude-one"}}},
+    {"type": "file", "path": "fixture-entry-semantics/.hermes/skills/hermes-one/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "hermes-one"}}},
+    {"type": "file", "path": "fixture-entry-semantics/.workbuddy/skills/workbuddy-one/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "workbuddy-one"}}},
+    {"type": "file", "path": "fixture-entry-semantics/skills/source-one/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "source-one"}}}
+  ],
+  "expected": {
+    "scan_status": "complete",
+    "file_observation_count": 4,
+    "logical_skill_count": 4,
+    "entry_binding_semantics": {
+      ".claude/skills": "observed_binding",
+      ".hermes/skills": "observed_binding",
+      ".workbuddy/skills": "observed_binding",
+      "skills": "source_only"
+    },
+    "binding_evidence_count": 3,
+    "source_only_evidence_count": 1,
+    "host_availability": "unverified",
+    "actual_use": "not_connected"
+  }
+}

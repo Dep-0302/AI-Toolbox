@@ -1,0 +1,918 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.ai-os.invalid/schemas/project-skill-snapshot.schema.json",
+  "title": "AI-Toolbox independent project Skill observation snapshot",
+  "$comment": "This contract is independent from ToolAsset and does not claim that a scanner, API, UI, persistence, host availability, or actual-use source is connected.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "observation_boundary_ref",
+    "generation_id",
+    "generated_at",
+    "scan_status",
+    "scan_scope",
+    "candidates",
+    "projects",
+    "human_associations",
+    "issues"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "observation_boundary_ref": {"$ref": "#/$defs/stable_id"},
+    "generation_id": {"type": "string", "pattern": "^[a-f0-9]{16}$"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "scan_status": {
+      "enum": ["complete", "partial", "error", "security_reject"]
+    },
+    "scan_scope": {"$ref": "#/$defs/scan_scope"},
+    "candidates": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/candidate"}
+    },
+    "projects": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/project_observation"}
+    },
+    "human_associations": {"$ref": "#/$defs/human_association_section"},
+    "issues": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {"$ref": "#/$defs/issue"}
+    },
+    "changes": {"$ref": "#/$defs/changes"}
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"scan_status": {"const": "complete"}},
+        "required": ["scan_status"]
+      },
+      "then": {"required": ["changes"]},
+      "else": {"not": {"required": ["changes"]}}
+    }
+  ],
+  "$defs": {
+    "stable_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "pattern": "^[a-z0-9][a-z0-9._:-]*$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "safe_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "pattern": "^(?![\\s\\S]*(?:/[U]sers/|file://|https?://|-----BEGIN|<script|api[_ -]?key|authorization|bearer[ \\t]))[\\s\\S]+$"
+    },
+    "nullable_safe_text": {
+      "oneOf": [
+        {"$ref": "#/$defs/safe_text"},
+        {"type": "null"}
+      ]
+    },
+    "relative_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "allOf": [
+        {"pattern": "^[^/\\\\\\u0000]+(?:/[^/\\\\\\u0000]+)*$"},
+        {"not": {"pattern": "(^|/)\\.{1,2}(/|$)"}},
+        {"not": {"pattern": "^[A-Za-z]:"}}
+      ]
+    },
+    "scan_scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trigger", "execution", "network", "limits"],
+      "properties": {
+        "trigger": {"const": "manual"},
+        "execution": {"const": "foreground"},
+        "network": {"const": "disabled"},
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "max_project_candidates",
+            "max_entries_per_project",
+            "max_depth",
+            "max_manifest_bytes",
+            "max_frontmatter_bytes",
+            "max_text_length",
+            "scan_timeout_seconds"
+          ],
+          "properties": {
+            "max_project_candidates": {"const": 256},
+            "max_entries_per_project": {"const": 1000},
+            "max_depth": {"const": 5},
+            "max_manifest_bytes": {"const": 262144},
+            "max_frontmatter_bytes": {"const": 32768},
+            "max_text_length": {"const": 4000},
+            "scan_timeout_seconds": {"const": 12}
+          }
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_id", "relative_path", "status", "observed_at"],
+      "properties": {
+        "candidate_id": {"$ref": "#/$defs/stable_id"},
+        "relative_path": {"$ref": "#/$defs/relative_path"},
+        "status": {"const": "unclassified"},
+        "observed_at": {"type": "string", "format": "date-time"}
+      }
+    },
+    "project_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project_id",
+        "relative_path",
+        "classification",
+        "display_name",
+        "scan_status",
+        "entries",
+        "logical_skills"
+      ],
+      "properties": {
+        "project_id": {"$ref": "#/$defs/stable_id"},
+        "relative_path": {"$ref": "#/$defs/relative_path"},
+        "classification": {
+          "enum": [
+            "project",
+            "container",
+            "archive",
+            "excluded",
+            "unclassified"
+          ]
+        },
+        "display_name": {"$ref": "#/$defs/safe_text"},
+        "parent_container_id": {"$ref": "#/$defs/stable_id"},
+        "scan_status": {
+          "enum": [
+            "complete",
+            "partial",
+            "error",
+            "security_reject",
+            "not_scanned"
+          ]
+        },
+        "entries": {
+          "type": "array",
+          "maxItems": 7,
+          "items": {"$ref": "#/$defs/entry_observation"}
+        },
+        "logical_skills": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {"$ref": "#/$defs/logical_skill"}
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"classification": {"const": "project"}},
+            "required": ["classification"]
+          },
+          "then": {
+            "properties": {
+              "scan_status": {
+                "enum": ["complete", "partial", "error", "security_reject"]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "scan_status": {"const": "not_scanned"},
+              "entries": {"maxItems": 0},
+              "logical_skills": {"maxItems": 0}
+            }
+          }
+        }
+      ]
+    },
+    "entry_semantics": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["relative_path", "kind", "host_hint", "binding_semantics"],
+          "properties": {
+            "relative_path": {"const": ".agents/skills"},
+            "kind": {"const": "host_entry"},
+            "host_hint": {"const": "codex_compatible"},
+            "binding_semantics": {"const": "project_binding_candidate"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["relative_path", "kind", "host_hint", "binding_semantics"],
+          "properties": {
+            "relative_path": {"const": ".claude/skills"},
+            "kind": {"const": "host_specific_entry"},
+            "host_hint": {"const": "claude"},
+            "binding_semantics": {"const": "project_binding_candidate"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["relative_path", "kind", "host_hint", "binding_semantics"],
+          "properties": {
+            "relative_path": {"const": ".codex/skills"},
+            "kind": {"const": "host_specific_or_legacy_entry"},
+            "host_hint": {"const": "codex"},
+            "binding_semantics": {"const": "observed_path_only"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["relative_path", "kind", "host_hint", "binding_semantics"],
+          "properties": {
+            "relative_path": {"const": ".hermes/skills"},
+            "kind": {"const": "host_specific_entry"},
+            "host_hint": {"const": "hermes"},
+            "binding_semantics": {"const": "project_binding_candidate"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["relative_path", "kind", "host_hint", "binding_semantics"],
+          "properties": {
+            "relative_path": {"const": ".workbuddy/skills"},
+            "kind": {"const": "host_specific_entry"},
+            "host_hint": {"const": "workbuddy"},
+            "binding_semantics": {"const": "project_binding_candidate"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["relative_path", "kind", "host_hint", "binding_semantics"],
+          "properties": {
+            "relative_path": {"const": "skills"},
+            "kind": {"const": "generic_source"},
+            "host_hint": {"type": "null"},
+            "binding_semantics": {"const": "source_only"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["relative_path", "kind", "host_hint", "binding_semantics"],
+          "properties": {
+            "relative_path": {"const": ".agents/plugins"},
+            "kind": {"const": "plugin_container"},
+            "host_hint": {"type": "null"},
+            "binding_semantics": {"const": "plugin_bundled_source"}
+          }
+        }
+      ]
+    },
+    "entry_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entry", "status", "observed_entry_count", "issue_refs"],
+      "properties": {
+        "entry": {"$ref": "#/$defs/entry_semantics"},
+        "status": {
+          "enum": [
+            "observed",
+            "empty",
+            "missing",
+            "partial",
+            "error",
+            "security_reject"
+          ]
+        },
+        "observed_entry_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "issue_refs": {
+          "type": "array",
+          "maxItems": 1000,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/stable_id"}
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"status": {"enum": ["empty", "missing"]}},
+            "required": ["status"]
+          },
+          "then": {"properties": {"observed_entry_count": {"const": 0}}}
+        },
+        {
+          "if": {
+            "properties": {"status": {"const": "observed"}},
+            "required": ["status"]
+          },
+          "then": {"properties": {"observed_entry_count": {"minimum": 1}}}
+        }
+      ]
+    },
+    "logical_skill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["logical_skill_id", "display_name", "observations"],
+      "properties": {
+        "logical_skill_id": {"$ref": "#/$defs/stable_id"},
+        "display_name": {"$ref": "#/$defs/safe_text"},
+        "localization": {"$ref": "#/$defs/project_skill_localization"},
+        "observations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1000,
+          "items": {"$ref": "#/$defs/skill_observation"}
+        }
+      }
+    },
+    "project_skill_localization": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "coverage_complete"],
+          "properties": {
+            "status": {"const": "missing"},
+            "coverage_complete": {"const": false}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "coverage_complete",
+            "asset_id",
+            "translated_from_projection_sha256_v1"
+          ],
+          "properties": {
+            "status": {"const": "stale"},
+            "coverage_complete": {"const": false},
+            "asset_id": {"$ref": "#/$defs/stable_id"},
+            "translated_from_projection_sha256_v1": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "coverage_complete",
+            "asset_id",
+            "zh_name",
+            "summary",
+            "use_cases",
+            "not_for",
+            "examples",
+            "translated_from_projection_sha256_v1"
+          ],
+          "properties": {
+            "status": {"enum": ["ai_draft", "reviewed"]},
+            "coverage_complete": {"const": true},
+            "asset_id": {"$ref": "#/$defs/stable_id"},
+            "zh_name": {"$ref": "#/$defs/safe_text"},
+            "summary": {"$ref": "#/$defs/safe_text"},
+            "use_cases": {"$ref": "#/$defs/project_skill_localization_list"},
+            "not_for": {"$ref": "#/$defs/project_skill_localization_list"},
+            "examples": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 3,
+              "items": {"$ref": "#/$defs/safe_text"}
+            },
+            "translated_from_projection_sha256_v1": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      ]
+    },
+    "project_skill_localization_list": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {"$ref": "#/$defs/safe_text"}
+    },
+    "skill_observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "observation_id",
+        "entry",
+        "manifest_relative_path",
+        "source_kind",
+        "file_type",
+        "link_status",
+        "observation_depth",
+        "manifest_size_bytes",
+        "frontmatter_bytes_read",
+        "manifest_modified_at",
+        "frontmatter_projection",
+        "projection_sha256_v1",
+        "openai_declaration",
+        "evidence",
+        "observed_at"
+      ],
+      "properties": {
+        "observation_id": {"$ref": "#/$defs/stable_id"},
+        "entry": {"$ref": "#/$defs/entry_semantics"},
+        "manifest_relative_path": {"$ref": "#/$defs/relative_path"},
+        "source_kind": {
+          "enum": [
+            "entity",
+            "same_project_symlink",
+            "plugin_bundled_source",
+            "generic_source",
+            "observed_path_only"
+          ]
+        },
+        "file_type": {"enum": ["regular_file", "symlink"]},
+        "link_status": {
+          "enum": ["not_applicable", "healthy_same_project"]
+        },
+        "resolved_relative_path": {"$ref": "#/$defs/relative_path"},
+        "observation_depth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "manifest_size_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 262144
+        },
+        "frontmatter_bytes_read": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 32768
+        },
+        "manifest_modified_at": {"type": "string", "format": "date-time"},
+        "frontmatter_projection": {"$ref": "#/$defs/frontmatter_projection"},
+        "projection_sha256_v1": {"$ref": "#/$defs/sha256"},
+        "openai_declaration": {"$ref": "#/$defs/openai_declaration"},
+        "evidence": {"$ref": "#/$defs/five_layer_evidence"},
+        "observed_at": {"type": "string", "format": "date-time"}
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"file_type": {"const": "regular_file"}},
+            "required": ["file_type"]
+          },
+          "then": {"properties": {"link_status": {"const": "not_applicable"}}}
+        },
+        {
+          "if": {
+            "properties": {"file_type": {"const": "symlink"}},
+            "required": ["file_type"]
+          },
+          "then": {
+            "properties": {
+              "link_status": {"const": "healthy_same_project"},
+              "source_kind": {"const": "same_project_symlink"}
+            },
+            "required": ["resolved_relative_path"]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "openai_declaration": {
+                "properties": {"status": {"const": "declared"}},
+                "required": ["status"]
+              }
+            },
+            "required": ["openai_declaration"]
+          },
+          "then": {
+            "properties": {
+              "evidence": {
+                "properties": {
+                  "invocation_eligibility": {
+                    "properties": {"status": {"const": "declaration_only"}},
+                    "required": ["status"]
+                  }
+                },
+                "required": ["invocation_eligibility"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "openai_declaration": {
+                "properties": {"status": {"const": "not_observed"}},
+                "required": ["status"]
+              }
+            },
+            "required": ["openai_declaration"]
+          },
+          "then": {
+            "properties": {
+              "evidence": {
+                "properties": {
+                  "invocation_eligibility": {
+                    "properties": {"status": {"const": "not_observed"}},
+                    "required": ["status"]
+                  }
+                },
+                "required": ["invocation_eligibility"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "openai_declaration": {
+                "properties": {"status": {"const": "unverified"}},
+                "required": ["status"]
+              }
+            },
+            "required": ["openai_declaration"]
+          },
+          "then": {
+            "properties": {
+              "evidence": {
+                "properties": {
+                  "invocation_eligibility": {
+                    "properties": {"status": {"const": "unverified"}},
+                    "required": ["status"]
+                  }
+                },
+                "required": ["invocation_eligibility"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "entry": {
+                "properties": {
+                  "binding_semantics": {"const": "project_binding_candidate"}
+                },
+                "required": ["binding_semantics"]
+              }
+            },
+            "required": ["entry"]
+          },
+          "then": {
+            "properties": {
+              "source_kind": {"enum": ["entity", "same_project_symlink"]},
+              "evidence": {
+                "properties": {
+                  "project_binding": {
+                    "properties": {"status": {"const": "observed_binding"}},
+                    "required": ["status"]
+                  }
+                },
+                "required": ["project_binding"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "entry": {
+                "properties": {"binding_semantics": {"const": "source_only"}},
+                "required": ["binding_semantics"]
+              }
+            },
+            "required": ["entry"]
+          },
+          "then": {
+            "properties": {
+              "source_kind": {"const": "generic_source"},
+              "evidence": {
+                "properties": {
+                  "project_binding": {
+                    "properties": {"status": {"const": "source_only"}},
+                    "required": ["status"]
+                  }
+                },
+                "required": ["project_binding"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "entry": {
+                "properties": {
+                  "binding_semantics": {"const": "plugin_bundled_source"}
+                },
+                "required": ["binding_semantics"]
+              }
+            },
+            "required": ["entry"]
+          },
+          "then": {
+            "properties": {
+              "source_kind": {"const": "plugin_bundled_source"},
+              "evidence": {
+                "properties": {
+                  "project_binding": {
+                    "properties": {"status": {"const": "plugin_bundled_source"}},
+                    "required": ["status"]
+                  }
+                },
+                "required": ["project_binding"]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "entry": {
+                "properties": {
+                  "binding_semantics": {"const": "observed_path_only"}
+                },
+                "required": ["binding_semantics"]
+              }
+            },
+            "required": ["entry"]
+          },
+          "then": {
+            "properties": {
+              "source_kind": {"const": "observed_path_only"},
+              "evidence": {
+                "properties": {
+                  "project_binding": {
+                    "properties": {"status": {"const": "observed_path_only"}},
+                    "required": ["status"]
+                  }
+                },
+                "required": ["project_binding"]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "frontmatter_projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "description",
+        "version",
+        "author",
+        "license",
+        "agent_created"
+      ],
+      "properties": {
+        "name": {"$ref": "#/$defs/nullable_safe_text"},
+        "description": {"$ref": "#/$defs/nullable_safe_text"},
+        "version": {"$ref": "#/$defs/nullable_safe_text"},
+        "author": {"$ref": "#/$defs/nullable_safe_text"},
+        "license": {"$ref": "#/$defs/nullable_safe_text"},
+        "agent_created": {
+          "oneOf": [
+            {"type": "boolean"},
+            {"$ref": "#/$defs/safe_text"},
+            {"type": "null"}
+          ]
+        }
+      }
+    },
+    "openai_declaration": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "allow_implicit_invocation"],
+          "properties": {
+            "status": {"const": "declared"},
+            "allow_implicit_invocation": {"type": "boolean"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {"const": "not_observed"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason"],
+          "properties": {
+            "status": {"const": "unverified"},
+            "reason": {
+              "enum": [
+                "scan_incomplete",
+                "invalid_yaml",
+                "over_limit",
+                "permission_denied",
+                "security_reject",
+                "path_race"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "five_layer_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_discovery",
+        "project_binding",
+        "host_availability",
+        "invocation_eligibility",
+        "actual_use"
+      ],
+      "properties": {
+        "file_discovery": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {"status": {"const": "observed"}}
+        },
+        "project_binding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "enum": [
+                "observed_binding",
+                "source_only",
+                "plugin_bundled_source",
+                "observed_path_only"
+              ]
+            }
+          }
+        },
+        "host_availability": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {"status": {"const": "unverified"}}
+        },
+        "invocation_eligibility": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "enum": ["declaration_only", "not_observed", "unverified"]
+            }
+          }
+        },
+        "actual_use": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {"status": {"const": "not_connected"}}
+        }
+      }
+    },
+    "human_association_section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["registry_id", "confirmed_on", "items"],
+      "properties": {
+        "registry_id": {"$ref": "#/$defs/stable_id"},
+        "confirmed_on": {"type": "string", "format": "date"},
+        "items": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {"$ref": "#/$defs/human_association"}
+        }
+      }
+    },
+    "human_association": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "association_id",
+        "project_id",
+        "relationship",
+        "reason",
+        "source"
+      ],
+      "properties": {
+        "association_id": {"$ref": "#/$defs/stable_id"},
+        "project_id": {"$ref": "#/$defs/stable_id"},
+        "relationship": {"const": "human_association"},
+        "asset_id": {"$ref": "#/$defs/stable_id"},
+        "unresolved_name": {"$ref": "#/$defs/safe_text"},
+        "reason": {"$ref": "#/$defs/safe_text"},
+        "source": {"$ref": "#/$defs/stable_id"}
+      },
+      "oneOf": [
+        {
+          "required": ["asset_id"],
+          "not": {"required": ["unresolved_name"]}
+        },
+        {
+          "required": ["unresolved_name"],
+          "not": {"required": ["asset_id"]}
+        }
+      ]
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue_id", "status", "code", "message"],
+      "properties": {
+        "issue_id": {"$ref": "#/$defs/stable_id"},
+        "status": {"enum": ["partial", "error", "security_reject"]},
+        "code": {"$ref": "#/$defs/stable_id"},
+        "message": {"$ref": "#/$defs/safe_text"},
+        "project_id": {"$ref": "#/$defs/stable_id"},
+        "relative_path": {"$ref": "#/$defs/relative_path"}
+      }
+    },
+    "changes": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason", "fingerprint_basis"],
+          "properties": {
+            "status": {"const": "not_available"},
+            "reason": {"const": "no_prior_complete_snapshot"},
+            "fingerprint_basis": {"const": "projection_sha256_v1"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "reason",
+            "fingerprint_basis",
+            "prior_fingerprint_basis"
+          ],
+          "properties": {
+            "status": {"const": "not_comparable"},
+            "reason": {"const": "fingerprint_version_mismatch"},
+            "fingerprint_basis": {"const": "projection_sha256_v1"},
+            "prior_fingerprint_basis": {"$ref": "#/$defs/stable_id"}
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "compared_to_generation_id",
+            "fingerprint_basis",
+            "added",
+            "changed",
+            "removed"
+          ],
+          "properties": {
+            "status": {"const": "compared"},
+            "compared_to_generation_id": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{16}$"
+            },
+            "fingerprint_basis": {"const": "projection_sha256_v1"},
+            "added": {
+              "type": "array",
+              "maxItems": 1000,
+              "uniqueItems": true,
+              "items": {"$ref": "#/$defs/stable_id"}
+            },
+            "changed": {
+              "type": "array",
+              "maxItems": 1000,
+              "uniqueItems": true,
+              "items": {"$ref": "#/$defs/stable_id"}
+            },
+            "removed": {
+              "type": "array",
+              "maxItems": 1000,
+              "uniqueItems": true,
+              "items": {"$ref": "#/$defs/stable_id"}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

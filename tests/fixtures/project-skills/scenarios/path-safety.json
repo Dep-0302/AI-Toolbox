@@ -1,0 +1,115 @@
+{
+  "scenario_version": 1,
+  "id": "path-safety",
+  "materialization": "each case uses an isolated temporary root",
+  "cases": [
+    {
+      "case_id": "broken-entry-link",
+      "scan_target": {"observation_root": ".", "project_root": "project-broken"},
+      "nodes": [
+        {"type": "directory", "path": "project-broken/.agents/skills"}
+      ],
+      "dynamic_symlinks": [
+        {"path": "project-broken/.agents/skills/broken", "target": "../missing/broken"}
+      ],
+      "expected": {"link_status": "broken", "target_read_count": 0, "scan_status": "partial"}
+    },
+    {
+      "case_id": "outside-entry-link",
+      "scan_target": {"observation_root": ".", "project_root": "project-outside"},
+      "nodes": [
+        {"type": "directory", "path": "project-outside/.agents/skills"},
+        {"type": "file", "path": "outside/escape-skill/SKILL.md", "content_utf8": "---\nname: outside-target\ndescription: Synthetic outside target.\n---\nOUTSIDE_TARGET_SENTINEL_DO_NOT_READ_OR_EMIT\n"}
+      ],
+      "dynamic_symlinks": [
+        {"path": "project-outside/.agents/skills/outside", "target": "../../../outside/escape-skill"}
+      ],
+      "expected": {"link_status": "outside_project", "target_read_count": 0, "scan_status": "partial", "must_not_emit": ["OUTSIDE_TARGET_SENTINEL_DO_NOT_READ_OR_EMIT"]}
+    },
+    {
+      "case_id": "loop-entry-links",
+      "scan_target": {"observation_root": ".", "project_root": "project-loop"},
+      "nodes": [
+        {"type": "directory", "path": "project-loop/.agents/skills"}
+      ],
+      "dynamic_symlinks": [
+        {"path": "project-loop/.agents/skills/loop-a", "target": "loop-b"},
+        {"path": "project-loop/.agents/skills/loop-b", "target": "loop-a"}
+      ],
+      "expected": {"link_status": "loop", "target_read_count": 0, "scan_status": "partial"}
+    },
+    {
+      "case_id": "descendant-link-skip",
+      "scan_target": {"observation_root": ".", "project_root": "project-descendant"},
+      "nodes": [
+        {"type": "file", "path": "project-descendant/.agents/skills/entity/SKILL.md", "content_utf8": "---\nname: descendant-owner\ndescription: Synthetic regular manifest.\n---\n"},
+        {"type": "file", "path": "outside/descendant.txt", "content_utf8": "DESCENDANT_TARGET_SENTINEL_DO_NOT_READ_OR_EMIT\n"}
+      ],
+      "dynamic_symlinks": [
+        {"path": "project-descendant/.agents/skills/entity/references/external.txt", "target": "../../../../../outside/descendant.txt"}
+      ],
+      "expected": {"manifest_read_count": 1, "descendant_link_status": "skipped", "descendant_target_read_count": 0, "scan_status": "complete", "must_not_emit": ["DESCENDANT_TARGET_SENTINEL_DO_NOT_READ_OR_EMIT"]}
+    },
+    {
+      "case_id": "observation-root-is-link",
+      "scan_target": {"observation_root": "linked-observation-root", "project_root": "linked-observation-root/project-root"},
+      "nodes": [
+        {"type": "file", "path": "real-observation-root/project-root/.agents/skills/root-bait/SKILL.md", "content_utf8": "---\nname: root-bait\ndescription: Synthetic root-link bait.\n---\n"}
+      ],
+      "dynamic_symlinks": [
+        {"path": "linked-observation-root", "target": "real-observation-root"}
+      ],
+      "expected": {"scope_status": "rejected", "error_code": "observation_root_symlink", "manifest_read_count": 0}
+    },
+    {
+      "case_id": "project-root-is-link",
+      "scan_target": {"observation_root": ".", "project_root": "project-root-link"},
+      "nodes": [
+        {"type": "file", "path": "real-project-root/.agents/skills/root-bait/SKILL.md", "content_utf8": "---\nname: project-root-bait\ndescription: Synthetic project-root bait.\n---\n"}
+      ],
+      "dynamic_symlinks": [
+        {"path": "project-root-link", "target": "real-project-root"}
+      ],
+      "expected": {"scope_status": "rejected", "error_code": "project_root_symlink", "manifest_read_count": 0}
+    },
+    {
+      "case_id": "project-ancestor-is-link",
+      "scan_target": {"observation_root": ".", "project_root": "linked-parent/nested-project"},
+      "nodes": [
+        {"type": "file", "path": "real-parent/nested-project/.agents/skills/ancestor-bait/SKILL.md", "content_utf8": "---\nname: ancestor-bait\ndescription: Synthetic ancestor-link bait.\n---\n"}
+      ],
+      "dynamic_symlinks": [
+        {"path": "linked-parent", "target": "real-parent"}
+      ],
+      "expected": {"scope_status": "rejected", "error_code": "project_ancestor_symlink", "manifest_read_count": 0}
+    },
+    {
+      "case_id": "manifest-toctou-swap",
+      "scan_target": {"observation_root": ".", "project_root": "project-race"},
+      "nodes": [
+        {"type": "file", "path": "project-race/.agents/skills/raced/SKILL.md", "content_utf8": "---\nname: before-race\ndescription: Synthetic pre-swap manifest.\n---\n"},
+        {"type": "file", "path": "outside/raced/SKILL.md", "content_utf8": "---\nname: after-race\ndescription: Synthetic race target.\n---\nTOCTOU_TARGET_SENTINEL_DO_NOT_READ_OR_EMIT\n"}
+      ],
+      "runtime_events": [
+        {
+          "phase": "after_path_validation_before_manifest_open",
+          "action": "replace_regular_file_with_symlink",
+          "path": "project-race/.agents/skills/raced/SKILL.md",
+          "target": "../../../../outside/raced/SKILL.md"
+        }
+      ],
+      "expected": {"scan_status": "partial", "error_code": "path_race", "replacement_target_read_count": 0, "must_not_emit": ["TOCTOU_TARGET_SENTINEL_DO_NOT_READ_OR_EMIT"]}
+    },
+    {
+      "case_id": "manifest-permission-denied",
+      "scan_target": {"observation_root": ".", "project_root": "project-denied"},
+      "nodes": [
+        {"type": "file", "path": "project-denied/.agents/skills/denied/SKILL.md", "content_utf8": "---\nname: denied\ndescription: Synthetic I/O failure target.\n---\n"}
+      ],
+      "io_faults": [
+        {"operation": "open_read", "path": "project-denied/.agents/skills/denied/SKILL.md", "error": "EACCES"}
+      ],
+      "expected": {"scan_status": "partial", "error_code": "permission_denied", "manifest_observed": false}
+    }
+  ]
+}

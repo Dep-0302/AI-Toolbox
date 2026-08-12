@@ -60,7 +60,7 @@ const health = {
   },
   source_session: {
     mode: 'default',
-    display_path: '~/AI-Toolbox-Collection',
+    display_path: '~/Example/Collection',
     source_key: 'default',
   },
   capabilities: {
@@ -121,7 +121,7 @@ function collectionSnapshot(sourceCount = 6) {
     base({
       source_id: 'src:skill',
       name: '电影生图 Skill',
-      relative_path: 'inbox/cinema.skill',
+      relative_path: 'incoming/cinema.skill',
       kind: 'skill_archive',
       origin_kind: 'chat',
       origin_basis: 'collection_path',
@@ -137,7 +137,7 @@ function collectionSnapshot(sourceCount = 6) {
     base({
       source_id: 'src:repo',
       name: 'sample-repo',
-      relative_path: 'archives/sample-repo',
+      relative_path: 'archive/sample-repo',
       kind: 'repository',
       origin_kind: 'github',
       origin_basis: 'git_remote',
@@ -152,7 +152,7 @@ function collectionSnapshot(sourceCount = 6) {
       },
       proposed_bucket: '20_整库与项目',
       relations: [
-        { type: 'supersedes', target_relative_path: 'archives/sample-repo-v1', note: '2.0.0 升级版' },
+        { type: 'supersedes', target_relative_path: 'archive/sample-repo-v1', note: '2.0.0 升级版' },
       ],
     }),
     base({
@@ -176,7 +176,7 @@ function collectionSnapshot(sourceCount = 6) {
     base({
       source_id: 'src:plugin',
       name: '创意 Plugin',
-      relative_path: 'inbox/creative-plugin.zip',
+      relative_path: 'incoming/creative-plugin.zip',
       origin_kind: 'chat',
       origin_basis: 'collection_path',
       capabilities: [capability('e', 'plugin', 'creative-plugin', '工具类')],
@@ -189,14 +189,14 @@ function collectionSnapshot(sourceCount = 6) {
     }),
     base({
       source_id: 'src:anchor',
-      name: 'Coordinator',
-      relative_path: 'workflows/coordinator',
+      name: 'shared-workflow',
+      relative_path: 'shared/shared-workflow',
       kind: 'repository',
       origin_kind: 'local',
       origin_basis: 'manual',
       size_bytes: 4096,
       scenarios: ['工具类'],
-      capabilities: [capability('f', 'workflow', 'Coordinator workflow', '工具类')],
+      capabilities: [capability('f', 'workflow', '共享工作流', '工具类')],
       host_links: [
         { host_id: 'codex', link_path: '~/.codex/skills/qunce', target_path: '/fixture/qunce' },
       ],
@@ -212,8 +212,8 @@ function collectionSnapshot(sourceCount = 6) {
     }),
     base({
       source_id: 'src:case',
-      name: '口红短片案例',
-      relative_path: 'inbox/sample-case.zip',
+      name: '示例案例包',
+      relative_path: 'incoming/example-case.zip',
       scenarios: [],
       capabilities: [capability('g', 'case_study', '完整对话案例', '广告与爆款分析')],
       classification: {
@@ -228,7 +228,7 @@ function collectionSnapshot(sourceCount = 6) {
     schema_version: 3,
     generated_at: '2026-08-09T20:00:00Z',
     mode: 'collection-observe',
-    source_root: '/home/example/AI-Toolbox-Collection',
+    source_root: '/private/snapshots/collection-source',
     summary: {
       source_count: items.length,
       capability_count: items.flatMap((item) => item.capabilities).length,
@@ -253,7 +253,7 @@ function collectionSnapshot(sourceCount = 6) {
 function candidateCatalog() {
   return {
     schema_version: 3,
-    source_dir: '/home/example/AI-Toolbox-Collection',
+    source_dir: '/private/snapshots/collection-source',
     groups: [
       {
         name: '电影感生图与视觉资产',
@@ -273,8 +273,8 @@ function candidateCatalog() {
         desc: 'cinematic fixture',
         desc_full: 'cinematic fixture full description',
         group: '电影感生图与视觉资产',
-        src: 'inbox/cinema.skill',
-        copy_srcs: ['inbox/cinema.skill', 'archives/cinema.skill'],
+        src: 'incoming/cinema.skill',
+        copy_srcs: ['incoming/cinema.skill', 'archive/cinema.skill'],
         tags: ['中文包'],
         platform: ['GPT Image'],
         inputs: ['参考图'],
@@ -286,6 +286,233 @@ function candidateCatalog() {
       },
     ],
   }
+}
+
+function projectSkillSnapshot(overrides = {}) {
+  const observedSkill = {
+    logical_skill_id: 'project-skill:fixture-observed',
+    display_name: 'reviewed-content-pipeline',
+    localization: {
+      status: 'reviewed',
+      coverage_complete: true,
+      asset_id: 'skill:reviewed-content-pipeline',
+      zh_name: '三阶段内容生产编排',
+      summary: '编排从剧本、导演分镜到可执行视频提示词的三阶段生产流程。',
+      use_cases: ['启动并审核三阶段内容生产流程。'],
+      not_for: ['跳过阶段间人工确认。'],
+      examples: ['从这版剧本启动流程，等我批准分镜后再继续。'],
+      translated_from_projection_sha256_v1: '1'.repeat(64),
+    },
+    observations: [
+      {
+        observation_id: 'observation:fixture-observed',
+        observed_at: '2026-08-11T12:00:00Z',
+        source_kind: 'entity',
+        entry: {
+          relative_path: '.agents/skills',
+          kind: 'host_entry',
+          host_hint: 'codex_compatible',
+          binding_semantics: 'project_binding_candidate',
+        },
+        manifest_relative_path: '.agents/skills/reviewed-content-pipeline/SKILL.md',
+        file_type: 'regular_file',
+        link_status: 'not_applicable',
+        frontmatter_projection: {
+          name: 'reviewed-content-pipeline',
+          description: '三阶段内容制作流程。',
+          version: null,
+          author: null,
+          license: null,
+          agent_created: null,
+        },
+        evidence: {
+          file_discovery: { status: 'observed' },
+          project_binding: { status: 'observed_binding' },
+          host_availability: { status: 'unverified' },
+          invocation_eligibility: { status: 'not_observed' },
+          actual_use: { status: 'not_connected' },
+        },
+      },
+    ],
+  }
+  const payload = {
+    schema_version: 1,
+    observation_boundary_ref: 'project-skill-observation-boundary-v1',
+    generation_id: 'a1b2c3d4e5f60001',
+    generated_at: '2026-08-11T12:00:00Z',
+    scan_status: 'complete',
+    scan_scope: {
+      trigger: 'manual',
+      execution: 'foreground',
+      network: 'disabled',
+      limits: {},
+    },
+    candidates: [
+      {
+        candidate_id: 'candidate:fixture',
+        relative_path: 'candidate-project',
+        status: 'unclassified',
+        observed_at: '2026-08-11T12:00:00Z',
+      },
+    ],
+    projects: [
+      {
+        project_id: 'project-alpha',
+        relative_path: 'example-project-alpha',
+        display_name: '示例项目 Alpha',
+        classification: 'project',
+        scan_status: 'complete',
+        entries: [
+          {
+            entry: {
+              relative_path: '.agents/skills',
+              kind: 'host_entry',
+              host_hint: 'codex_compatible',
+              binding_semantics: 'project_binding_candidate',
+            },
+            status: 'observed',
+            observed_entry_count: 1,
+            issue_refs: [],
+          },
+        ],
+        logical_skills: [observedSkill],
+      },
+      {
+        project_id: 'project-beta',
+        relative_path: 'example-project-beta',
+        display_name: '示例项目 Beta',
+        classification: 'project',
+        scan_status: 'complete',
+        entries: [],
+        logical_skills: [],
+      },
+      {
+        project_id: 'container-codex',
+        relative_path: 'Codex',
+        display_name: 'Codex',
+        classification: 'container',
+        scan_status: 'not_scanned',
+        entries: [],
+        logical_skills: [],
+      },
+    ],
+    human_associations: {
+      registry_id: 'project-skill-associations-v1',
+      confirmed_on: '2026-08-11',
+      items: [
+        {
+          association_id: 'human-association:project-beta:skill:apple-design',
+          project_id: 'project-beta',
+          asset_id: 'skill:apple-design',
+          relationship: 'human_association',
+          reason: '人工确认该 Skill 与此前端 UI 项目的设计需求相关。',
+          source: 'gate_a_user_confirmation',
+        },
+      ],
+    },
+    changes: {
+      status: 'compared',
+      compared_to_generation_id: 'a1b2c3d4e5f60000',
+      fingerprint_basis: 'projection_sha256_v1',
+      added: [],
+      changed: [],
+      removed: [],
+    },
+    issues: [],
+  }
+  return { ...payload, ...overrides }
+}
+
+function projectSkillView(snapshotPayload = projectSkillSnapshot(), overrides = {}) {
+  return {
+    snapshot: snapshotPayload,
+    last_attempt: {
+      schema_version: 1,
+      observation_boundary_ref: 'project-skill-observation-boundary-v1',
+      attempted_at: snapshotPayload.generated_at,
+      attempt_generation_id: snapshotPayload.generation_id,
+      scan_status: snapshotPayload.scan_status,
+      promoted: snapshotPayload.scan_status === 'complete',
+      matches_complete_snapshot: snapshotPayload.scan_status === 'complete',
+      complete_snapshot_generation_id: snapshotPayload.generation_id,
+      issues: [],
+    },
+    report: {
+      available: true,
+      generation_id: snapshotPayload.generation_id,
+      content: `# 项目 Skill 总览\n\n快照 ${snapshotPayload.generation_id}\n`,
+    },
+    integrity: { degraded: false, errors: [] },
+    ...overrides,
+  }
+}
+
+function projectWorkbenchFetch({
+  projectGet = response(projectSkillView()),
+  projectRefresh = response(projectSkillSnapshot({
+    generation_id: 'a1b2c3d4e5f60002',
+    generated_at: '2026-08-11T13:00:00Z',
+  })),
+} = {}) {
+  return vi.fn(async (url, options = {}) => {
+    if (url === '/api/health') {
+      return response({
+        ...health,
+        project_skill_snapshot: {
+          available: true,
+          refresh_state: 'idle',
+          integrity: { degraded: false, errors: [] },
+        },
+      })
+    }
+    if (url === '/api/snapshot') return response(snapshot(3, 'abcdefabcdef0001'))
+    if (url === '/api/collections/check') {
+      return response({
+        status: 'unchanged',
+        reason: 'input_signature_match',
+        stable: true,
+        snapshot: collectionSnapshot(),
+      })
+    }
+    if (url === '/candidates/data.json') return response(candidateCatalog())
+    if (url === '/api/project-skills') {
+      return typeof projectGet === 'function' ? projectGet(url, options) : projectGet
+    }
+    if (url === '/api/project-skills/refresh') {
+      return typeof projectRefresh === 'function' ? projectRefresh(url, options) : projectRefresh
+    }
+    throw new Error(`unexpected ${url}`)
+  })
+}
+
+async function renderProjectWorkbench(fetchMock = projectWorkbenchFetch()) {
+  vi.stubGlobal('fetch', fetchMock)
+  vi.stubGlobal('scrollTo', vi.fn())
+  const container = document.createElement('div')
+  document.body.append(container)
+  const root = createRoot(container)
+  await act(async () => {
+    root.render(React.createElement(App))
+    await flush()
+    await flush()
+  })
+  return { root, fetchMock }
+}
+
+function projectNavButton(selector = '.sidebar-nav') {
+  return [...document.querySelectorAll(`${selector} button`)].find((button) =>
+    button.textContent.includes('项目 Skill'),
+  )
+}
+
+async function openProjectSkills(selector = '.sidebar-nav') {
+  const button = projectNavButton(selector)
+  expect(button).toBeTruthy()
+  await act(async () => {
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flush()
+    await flush()
+  })
 }
 
 async function flush() {
@@ -407,6 +634,380 @@ describe('App refresh state', () => {
     await act(async () => root.unmount())
   })
 
+  it('aggregates same-source candidate quality, preserves host findings, and deep-links precisely', async () => {
+    const hostAsset = {
+      asset_id: 'cli:codex',
+      type: 'cli',
+      source_name: 'codex',
+      localization: { zh_name: 'Codex CLI', summary: 'Codex 命令行入口', status: 'stale' },
+      curation: { category: '开发与工程', subcategory: '命令行工具' },
+      host_bindings: [],
+    }
+    const initial = snapshot(1, 'health-aggregate', [hostAsset])
+    initial.health_findings = [{
+      code: 'localization_stale',
+      severity: 'warning',
+      asset_id: 'cli:codex',
+      detail: '原文指纹已经变化，需要重新核对中文说明。',
+    }]
+    initial.summary.health_finding_count = 1
+
+    const collections = collectionSnapshot()
+    const candidates = candidateCatalog()
+    candidates.generated_at = '2026-08-11T05:33:52-07:00'
+    Object.assign(candidates.items[0], {
+      zh_state: 'stale',
+      desc_flags: ['truncated'],
+      tags: ['中文包', '简介有问题'],
+    })
+    candidates.items.push({
+      ...candidates.items[0],
+      uid: 'candidate-broken',
+      name: 'broken-cinema-image',
+      zh_name: '简介异常候选',
+      src: 'incoming/broken.skill',
+      copy_srcs: ['incoming/broken.skill'],
+      zh_state: 'ai_draft',
+      desc_flags: ['desc_broken'],
+      tags: ['简介有问题'],
+    })
+    candidates.groups[0].count = 2
+    candidates.facets = {
+      platform: [{ value: 'GPT Image', count: 2 }],
+      inputs: [{ value: '参考图', count: 2 }],
+      outputs: [{ value: '视觉资产', count: 2 }],
+      zh_state: [
+        { value: 'stale', count: 1 },
+        { value: 'ai_draft', count: 1 },
+      ],
+      has: [
+        { value: '中文包', count: 1 },
+        { value: '简介有问题', count: 2 },
+      ],
+    }
+
+    const fetchMock = vi.fn(async (url) => {
+      if (url === '/api/health') return response(health)
+      if (url === '/api/snapshot') return response(initial)
+      if (url === '/api/collections/check') {
+        return response({
+          status: 'unchanged',
+          reason: 'input_signature_match',
+          stable: true,
+          snapshot: collections,
+        })
+      }
+      if (url === '/candidates/data.json') return response(candidates)
+      throw new Error(`unexpected request: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('scrollTo', vi.fn())
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(React.createElement(App))
+      await flush()
+      await flush()
+    })
+
+    const healthNav = [...document.querySelectorAll('.sidebar-nav button')].find((button) =>
+      button.textContent.includes('系统体检'),
+    )
+    await act(async () => {
+      healthNav.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+    })
+
+    expect(document.querySelector('.health-intro h2')?.textContent).toBe('4 条体检记录')
+    expect(document.querySelector('.health-scope-summary')?.textContent).toContain('宿主 1 条')
+    expect(document.querySelector('.health-scope-summary')?.textContent).toContain('候选 3 条')
+    expect(document.body.textContent).toContain('候选 · 中文说明待复核')
+    expect(document.body.textContent).toContain('候选 · 简介解析异常')
+    expect(document.body.textContent).toContain('候选 · 卡片简介已截短')
+
+    const findingGroup = (title) => [...document.querySelectorAll('.finding-group')].find((group) =>
+      group.querySelector('summary strong')?.textContent === title,
+    )
+    const hostGroup = findingGroup('中文说明待复核')
+    await act(async () => {
+      hostGroup.querySelector('.finding-rows button').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+    })
+    expect(document.querySelector('aside[aria-label="Codex CLI详情"]')).toBeTruthy()
+    await act(async () => {
+      document.querySelector('aside[aria-label="Codex CLI详情"] button[aria-label="关闭详情"]')
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+    })
+
+    const candidateGroup = findingGroup('候选 · 中文说明待复核')
+    await act(async () => {
+      candidateGroup.querySelector('.finding-rows button').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+      await flush()
+    })
+
+    expect(document.querySelector('.candidates-view')).toBeTruthy()
+    expect(document.querySelector('aside[aria-label="电影生图 Skill详情"]')).toBeTruthy()
+    const cardTags = [...document.querySelectorAll('.candidate-card-tags')].map((node) => node.textContent)
+    expect(cardTags.some((text) => text.includes('中文说明待复核'))).toBe(true)
+    expect(cardTags.some((text) => text.includes('简介已截短'))).toBe(true)
+    expect(cardTags.some((text) => text.includes('简介解析异常'))).toBe(true)
+    expect(cardTags.join(' ')).not.toContain('中文已过期')
+    expect(cardTags.join(' ')).not.toContain('简介有问题')
+
+    await act(async () => {
+      document.querySelector('aside[aria-label="电影生图 Skill详情"] button[aria-label="关闭详情"]')
+        .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      const filterButton = [...document.querySelectorAll('.candidates-toolbar button')].find((button) =>
+        button.textContent.includes('筛选'),
+      )
+      filterButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+    })
+    const filterPanel = document.querySelector('.candidates-filter-panel')
+    expect(filterPanel.textContent).not.toContain('简介有问题')
+    const parsingFilter = [...filterPanel.querySelectorAll('button')].find((button) =>
+      button.textContent.includes('简介解析异常'),
+    )
+    const truncatedFilter = [...filterPanel.querySelectorAll('button')].find((button) =>
+      button.textContent.includes('简介已截短'),
+    )
+    expect(parsingFilter.textContent).toContain('1')
+    expect(truncatedFilter.textContent).toContain('1')
+
+    await act(async () => {
+      parsingFilter.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+    })
+    expect(document.querySelectorAll('.candidate-card')).toHaveLength(1)
+    expect(document.querySelector('.candidate-card')?.textContent).toContain('简介异常候选')
+    await act(async () => {
+      parsingFilter.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      truncatedFilter.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+    })
+    expect(document.querySelectorAll('.candidate-card')).toHaveLength(1)
+    expect(document.querySelector('.candidate-card')?.textContent).toContain('电影生图 Skill')
+
+    for (const url of ['/api/refresh', '/api/candidates/refresh', '/api/collections/refresh']) {
+      expect(fetchMock.mock.calls.some(([calledUrl]) => calledUrl === url)).toBe(false)
+    }
+
+    await act(async () => root.unmount())
+  })
+
+  it('fails closed when candidate and collection sources differ', async () => {
+    const initial = snapshot(0, 'candidate-source-mismatch')
+    const collections = collectionSnapshot()
+    const candidates = candidateCatalog()
+    candidates.source_dir = '/private/snapshots/other-collection-source'
+    Object.assign(candidates.items[0], { zh_state: 'stale', desc_flags: ['truncated'] })
+
+    const fetchMock = vi.fn(async (url) => {
+      if (url === '/api/health') return response(health)
+      if (url === '/api/snapshot') return response(initial)
+      if (url === '/api/collections/check') {
+        return response({ status: 'unchanged', stable: true, snapshot: collections })
+      }
+      if (url === '/candidates/data.json') return response(candidates)
+      throw new Error(`unexpected request: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('scrollTo', vi.fn())
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(React.createElement(App))
+      await flush()
+      await flush()
+    })
+    const healthNav = [...document.querySelectorAll('.sidebar-nav button')].find((button) =>
+      button.textContent.includes('系统体检'),
+    )
+    await act(async () => {
+      healthNav.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+    })
+
+    expect(document.querySelector('.health-intro h2')?.textContent).toBe('0 条体检记录')
+    expect(document.querySelector('.health-scope-summary')?.textContent).toContain('候选来源不一致')
+    expect(document.body.textContent).toContain('已按边界排除')
+    expect(document.body.textContent).not.toContain('候选 · 中文说明待复核')
+
+    await act(async () => root.unmount())
+  })
+
+  it('treats a same-source malformed candidate catalog as unavailable', async () => {
+    const initial = snapshot(0, 'candidate-catalog-malformed')
+    const collections = collectionSnapshot()
+    const candidates = { ...candidateCatalog(), items: 'not-an-array' }
+
+    const fetchMock = vi.fn(async (url) => {
+      if (url === '/api/health') return response(health)
+      if (url === '/api/snapshot') return response(initial)
+      if (url === '/api/collections/check') {
+        return response({ status: 'unchanged', stable: true, snapshot: collections })
+      }
+      if (url === '/candidates/data.json') return response(candidates)
+      throw new Error(`unexpected request: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('scrollTo', vi.fn())
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(React.createElement(App))
+      await flush()
+      await flush()
+    })
+    const healthNav = [...document.querySelectorAll('.sidebar-nav button')].find((button) =>
+      button.textContent.includes('系统体检'),
+    )
+    await act(async () => {
+      healthNav.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+    })
+
+    expect(document.querySelector('.health-scope-summary')?.textContent).toContain('候选范围未载入')
+    expect(document.querySelector('.health-scope-summary')?.textContent).not.toContain('候选 0 条')
+
+    await act(async () => root.unmount())
+  })
+
+  it('keeps malformed rows and duplicate UIDs out of candidate cards and health deep-links', async () => {
+    const initial = snapshot(0, 'candidate-row-malformed')
+    const collections = collectionSnapshot()
+    const baseItem = candidateCatalog().items[0]
+    const candidates = candidateCatalog()
+    candidates.items = [
+      null,
+      {
+        ...baseItem,
+        uid: 'safe-stale',
+        name: 'safe-stale-name',
+        zh_name: { bad: true },
+        zh_state: 'stale',
+        desc_flags: [],
+      },
+      { ...baseItem, uid: 'duplicate', name: 'duplicate-first', zh_state: 'stale' },
+      { ...baseItem, uid: 'duplicate', name: 'duplicate-second', zh_state: 'stale' },
+    ]
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const fetchMock = vi.fn(async (url) => {
+      if (url === '/api/health') return response(health)
+      if (url === '/api/snapshot') return response(initial)
+      if (url === '/api/collections/check') {
+        return response({ status: 'unchanged', stable: true, snapshot: collections })
+      }
+      if (url === '/candidates/data.json') return response(candidates)
+      throw new Error(`unexpected request: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('scrollTo', vi.fn())
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(React.createElement(App))
+      await flush()
+      await flush()
+    })
+    const healthNav = [...document.querySelectorAll('.sidebar-nav button')].find((button) =>
+      button.textContent.includes('系统体检'),
+    )
+    await act(async () => {
+      healthNav.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+    })
+
+    const staleGroup = [...document.querySelectorAll('.finding-group')].find((group) =>
+      group.querySelector('summary strong')?.textContent === '候选 · 中文说明待复核',
+    )
+    expect(staleGroup.querySelectorAll('.finding-rows button')).toHaveLength(1)
+    expect(staleGroup.textContent).toContain('safe-stale-name')
+    expect(staleGroup.textContent).not.toContain('duplicate-first')
+    expect(staleGroup.textContent).not.toContain('duplicate-second')
+
+    await act(async () => {
+      staleGroup.querySelector('.finding-rows button').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+      await flush()
+    })
+
+    expect(document.querySelector('.candidates-intro h2')?.textContent).toBe('1 个备选 Skill')
+    expect(document.querySelectorAll('.candidate-card')).toHaveLength(1)
+    expect(document.querySelector('aside[aria-label="safe-stale-name详情"]')).toBeTruthy()
+    expect(document.body.textContent).not.toContain('duplicate-first')
+    expect(document.body.textContent).not.toContain('duplicate-second')
+    expect(consoleError).not.toHaveBeenCalled()
+
+    await act(async () => root.unmount())
+  })
+
+  it('keeps snapshot stale findings visible after a browser-only Chinese review', async () => {
+    const initial = snapshot(0, 'candidate-local-review')
+    const collections = collectionSnapshot()
+    const candidates = candidateCatalog()
+    Object.assign(candidates.items[0], { zh_state: 'stale', desc_flags: [] })
+    localStorage.setItem('skill-workbench:decisions:v1', JSON.stringify({
+      schema_version: 1,
+      decisions: {},
+      overrides: { 'candidate-cinema': { zh_reviewed: true } },
+    }))
+
+    const fetchMock = vi.fn(async (url) => {
+      if (url === '/api/health') return response(health)
+      if (url === '/api/snapshot') return response(initial)
+      if (url === '/api/collections/check') {
+        return response({ status: 'unchanged', stable: true, snapshot: collections })
+      }
+      if (url === '/candidates/data.json') return response(candidates)
+      throw new Error(`unexpected request: ${url}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.stubGlobal('scrollTo', vi.fn())
+
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(React.createElement(App))
+      await flush()
+      await flush()
+    })
+    const healthNav = [...document.querySelectorAll('.sidebar-nav button')].find((button) =>
+      button.textContent.includes('系统体检'),
+    )
+    await act(async () => {
+      healthNav.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+    })
+    const candidateGroup = [...document.querySelectorAll('.finding-group')].find((group) =>
+      group.querySelector('summary strong')?.textContent === '候选 · 中文说明待复核',
+    )
+    expect(candidateGroup).toBeTruthy()
+    await act(async () => {
+      candidateGroup.querySelector('.finding-rows button').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+      await flush()
+    })
+
+    const drawer = document.querySelector('aside[aria-label="电影生图 Skill详情"]')
+    expect(drawer.textContent).toContain('候选快照中的原包内容已变更，中文说明待复核')
+    expect(drawer.textContent).toContain('当前浏览器已标记确认，但尚未回写候选快照')
+
+    await act(async () => root.unmount())
+  })
+
   it('refreshes candidate data in place and preserves browser decisions', async () => {
     const initial = snapshot(3, '4444444444444444')
     const refreshed = candidateCatalog()
@@ -415,8 +1016,8 @@ describe('App refresh state', () => {
       uid: 'candidate-new',
       name: 'new-candidate',
       zh_name: '新增候选 Skill',
-      src: 'inbox/new-candidate.skill',
-      copy_srcs: ['inbox/new-candidate.skill'],
+      src: 'incoming/new-candidate.skill',
+      copy_srcs: ['incoming/new-candidate.skill'],
     })
     refreshed.groups[0].count = 2
     localStorage.setItem('skill-workbench:decisions:v1', JSON.stringify({
@@ -523,6 +1124,7 @@ describe('App refresh state', () => {
     expect([...document.querySelectorAll('.sidebar-nav button')].map((button) => button.textContent.trim())).toEqual([
       '总览',
       'Skill 库',
+      '项目 Skill',
       'Plugin 与工具',
       '备选 skill 库',
       '全部收藏',
@@ -598,7 +1200,7 @@ describe('App refresh state', () => {
     const collections = collectionSnapshot()
     collections.scan_errors = [{
       code: 'symlink_skipped',
-      path: 'archives/sample-repo/.opencode/skills',
+      path: 'archive/sample-repo/.opencode/skills',
     }]
     collections.summary.scan_error_count = 1
     const fetchMock = vi.fn()
@@ -638,7 +1240,7 @@ describe('App refresh state', () => {
     expect(disclosure.textContent).toContain('符号链接未跟随')
     expect(disclosure.textContent).toContain('symlink_skipped')
     expect(disclosure.textContent).toContain(
-      '/home/example/AI-Toolbox-Collection/archives/sample-repo/.opencode/skills',
+      '~/Example/Collection/archive/sample-repo/.opencode/skills',
     )
     expect(disclosure.querySelector('button[aria-label="复制路径"]')).toBeTruthy()
 
@@ -670,14 +1272,14 @@ describe('App refresh state', () => {
     const initial = snapshot(3, '5656565656565657')
     const collections = collectionSnapshot()
     const archiveErrors = [
-      { code: 'archive_compression_ratio', path: 'archives/sample-repo/ratio.zip' },
-      { code: 'archive_duplicate_path', path: 'archives/sample-repo/duplicate.zip' },
-      { code: 'archive_encrypted_entry', path: 'archives/sample-repo/encrypted.zip' },
-      { code: 'archive_entry_limit', path: 'archives/sample-repo/many-files.zip' },
-      { code: 'archive_member_too_large', path: 'archives/sample-repo/large-member.zip' },
-      { code: 'archive_path_invalid', path: 'archives/sample-repo/unsafe-path.zip' },
-      { code: 'archive_total_size_limit', path: 'archives/sample-repo/large-expanded.zip' },
-      { code: 'archive_unreadable', path: 'archives/sample-repo/broken.zip' },
+      { code: 'archive_compression_ratio', path: 'archive/sample-repo/ratio.zip' },
+      { code: 'archive_duplicate_path', path: 'archive/sample-repo/duplicate.zip' },
+      { code: 'archive_encrypted_entry', path: 'archive/sample-repo/encrypted.zip' },
+      { code: 'archive_entry_limit', path: 'archive/sample-repo/many-files.zip' },
+      { code: 'archive_member_too_large', path: 'archive/sample-repo/large-member.zip' },
+      { code: 'archive_path_invalid', path: 'archive/sample-repo/unsafe-path.zip' },
+      { code: 'archive_total_size_limit', path: 'archive/sample-repo/large-expanded.zip' },
+      { code: 'archive_unreadable', path: 'archive/sample-repo/broken.zip' },
     ]
     const failedAttempt = {
       generated_at: '2026-08-11T10:11:00Z',
@@ -686,7 +1288,7 @@ describe('App refresh state', () => {
         ...archiveErrors,
         {
           code: 'symlink_skipped',
-          path: 'archives/sample-repo/.opencode/skills',
+          path: 'archive/sample-repo/.opencode/skills',
         },
       ],
     }
@@ -763,7 +1365,7 @@ describe('App refresh state', () => {
       summary: { scan_error_count: 1 },
       scan_errors: [{
         code: 'manifest_unreadable',
-        path: 'archives/sample-repo/plugin.json',
+        path: 'archive/sample-repo/plugin.json',
         detail: 'fixture permission denied',
       }],
     }
@@ -808,7 +1410,7 @@ describe('App refresh state', () => {
     expect(disclosure.textContent).toContain('manifest_unreadable')
     expect(disclosure.textContent).toContain('fixture permission denied')
     expect(disclosure.textContent).toContain(
-      '/home/example/AI-Toolbox-Collection/archives/sample-repo/plugin.json',
+      '~/Example/Collection/archive/sample-repo/plugin.json',
     )
 
     const manualRefresh = [...document.querySelectorAll('button')].find((button) =>
@@ -860,7 +1462,7 @@ describe('App refresh state', () => {
     const repoCard = cards.find((card) => card.textContent.includes('sample-repo'))
     expect(repoCard).toBeTruthy()
     expect(repoCard.textContent).toContain('GitHub')
-    expect(repoCard.textContent).not.toContain('archives/sample-repo')
+    expect(repoCard.textContent).not.toContain('archive/sample-repo')
     expect(repoCard.querySelector('.collection-meta-badge')?.dataset.tooltip).toContain('根据 Git 仓库来源识别')
     expect(repoCard.querySelector('.collection-meta-badge')?.classList.contains('tone-violet')).toBe(true)
 
@@ -874,9 +1476,9 @@ describe('App refresh state', () => {
     expect(drawer.textContent).toContain('仅收藏')
     expect(drawer.textContent).toContain('较新版本')
     expect(drawer.textContent).toContain('路径')
-    expect(drawer.textContent).toContain('archives/sample-repo')
+    expect(drawer.textContent).toContain('archive/sample-repo')
     expect(drawer.textContent).toContain('升级自')
-    expect(drawer.textContent).toContain('archives/sample-repo-v1')
+    expect(drawer.textContent).toContain('archive/sample-repo-v1')
     expect(drawer.querySelectorAll('.collection-meta-badge[data-tooltip]').length).toBeGreaterThanOrEqual(4)
 
     await act(async () => {
@@ -907,8 +1509,8 @@ describe('App refresh state', () => {
     expect(drawer.textContent).toContain('仅收藏')
     expect(drawer.textContent).toContain('发现重复')
     expect(drawer.textContent).toContain('同版本副本')
-    expect(drawer.textContent).toContain('inbox/cinema.skill')
-    expect(drawer.textContent).toContain('archives/cinema.skill')
+    expect(drawer.textContent).toContain('incoming/cinema.skill')
+    expect(drawer.textContent).toContain('archive/cinema.skill')
 
     await act(async () => root.unmount())
   })
@@ -1187,7 +1789,9 @@ describe('App refresh state', () => {
       await flush(); await flush()
     })
     expect(document.querySelector('[role="dialog"]')).toBeNull()
-    expect(document.querySelector('.collection-source-line code')?.textContent).toBe(health.source_session.display_path)
+    expect(document.querySelector('.collection-source-line code')?.textContent)
+      .toBe(health.source_session.display_path)
+    expect(document.body.textContent).not.toContain(defaults.source_root)
     expect(document.body.textContent).toContain('已取消选择，当前收藏来源和索引均未改变')
     expect(fetchMock.mock.calls.some(([url]) => url === '/api/folder-selection/confirm')).toBe(false)
 
@@ -1459,14 +2063,14 @@ describe('App refresh state', () => {
     await act(async () => root.unmount())
   })
 
-  it('keeps matching canonical sources while displaying the abbreviated session path', async () => {
+  it('uses the session display path while retaining canonical roots for source matching', async () => {
     const initial = snapshot(2, '9999999999999994')
     const defaults = collectionSnapshot()
     const abbreviatedHealth = {
       ...health,
       source_session: {
         ...health.source_session,
-        display_path: '~/AI-Toolbox-Collection',
+        display_path: '~/Example/AbbreviatedCollection',
       },
     }
     const fetchMock = vi.fn(async (url) => {
@@ -1499,6 +2103,7 @@ describe('App refresh state', () => {
     expect(document.body.textContent).not.toContain('候选索引来源与当前会话收藏来源不一致')
     expect(document.querySelector('.candidate-source-line code')?.textContent)
       .toBe(abbreviatedHealth.source_session.display_path)
+    expect(document.body.textContent).not.toContain(candidateCatalog().source_dir)
 
     await act(async () => root.unmount())
   })
@@ -1603,7 +2208,9 @@ describe('App refresh state', () => {
     const dialog = document.querySelector('[role="dialog"]')
     expect(dialog).toBeTruthy()
     expect(dialog.textContent).toContain('本次临时来源扫描失败，当前会话数据未被覆盖')
-    expect(document.querySelector('.collection-source-line code')?.textContent).toBe(health.source_session.display_path)
+    expect(document.querySelector('.collection-source-line code')?.textContent)
+      .toBe(health.source_session.display_path)
+    expect(document.body.textContent).not.toContain(defaults.source_root)
     expect(document.querySelector('.collection-source-line')?.textContent).toContain('默认目录')
     expect(document.body.textContent).not.toContain('已为本次本地服务会话切换收藏来源')
 
@@ -1617,6 +2224,7 @@ describe('App refresh state', () => {
     })
     expect(document.querySelector('.candidate-source-line code')?.textContent)
       .toBe(health.source_session.display_path)
+    expect(document.body.textContent).not.toContain(defaultCandidates.source_dir)
     expect(document.querySelector('.candidate-card')).toBeTruthy()
 
     await act(async () => root.unmount())
@@ -1826,6 +2434,508 @@ describe('App refresh state', () => {
       await flush()
     })
     expect(document.querySelector('.detail-drawer')?.textContent).toContain('分镜连接')
+
+    await act(async () => root.unmount())
+  })
+})
+
+describe('项目 Skill 只读工作台', () => {
+  it('启动时不请求项目 API，首次导航才惰性 GET 且只读一次', async () => {
+    const { root, fetchMock } = await renderProjectWorkbench()
+
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/project-skills')).toBe(false)
+
+    await openProjectSkills()
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/project-skills')).toHaveLength(1)
+    expect(document.body.textContent).toContain('示例项目 Alpha')
+
+    const overview = [...document.querySelectorAll('.sidebar-nav button')].find((button) =>
+      button.textContent.includes('总览'),
+    )
+    await act(async () => {
+      overview.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+    })
+    await openProjectSkills()
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/project-skills')).toHaveLength(1)
+
+    await act(async () => root.unmount())
+  })
+
+  it('将项目快照 404 显示为独立空态，不冒充宿主快照空态', async () => {
+    const missing = response({
+      error: 'project_skill_snapshot_missing',
+      message: '尚未建立项目 Skill 观察快照',
+    }, 404)
+    const { root } = await renderProjectWorkbench(projectWorkbenchFetch({ projectGet: missing }))
+
+    await openProjectSkills()
+
+    const emptyState = document.querySelector('.project-skills-view .project-skills-state[role="status"]')
+    expect(emptyState).toBeTruthy()
+    expect(emptyState.textContent).toContain('尚未建立项目 Skill')
+    expect(emptyState.textContent).toContain('手动')
+    expect(document.querySelector('.first-observation')).toBeNull()
+    expect(document.querySelector('button[aria-label="刷新项目 Skill"]')).toBeTruthy()
+
+    await act(async () => root.unmount())
+  })
+
+  it('手动刷新只调用专用端点并携带 CSRF，不调用宿主 /api/refresh', async () => {
+    const refreshed = projectSkillSnapshot({
+      generation_id: 'a1b2c3d4e5f60003',
+      generated_at: '2026-08-11T14:00:00Z',
+      projects: [
+        ...projectSkillSnapshot().projects,
+        {
+          project_id: 'project-gamma',
+          relative_path: 'example-project-gamma',
+          display_name: '示例项目 Gamma',
+          classification: 'project',
+          scan_status: 'complete',
+          entries: [],
+          logical_skills: [],
+        },
+      ],
+    })
+    let projectReadCount = 0
+    const { root, fetchMock } = await renderProjectWorkbench(projectWorkbenchFetch({
+      projectGet: () => {
+        projectReadCount += 1
+        return response(projectSkillView(projectReadCount === 1 ? projectSkillSnapshot() : refreshed))
+      },
+      projectRefresh: response(refreshed),
+    }))
+    await openProjectSkills()
+
+    const refreshButton = document.querySelector('button[aria-label="刷新项目 Skill"]')
+    expect(refreshButton).toBeTruthy()
+    await act(async () => {
+      refreshButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+      await flush()
+    })
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/project-skills/refresh', expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({
+        'Content-Type': 'application/json',
+        'X-AI-Toolbox-CSRF': 'fixture-csrf',
+      }),
+      body: '{}',
+    }))
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/refresh')).toBe(false)
+    expect(document.body.textContent).toContain('示例项目 Gamma')
+    expect(document.body.textContent).toContain('项目 Skill 只读观察已更新')
+
+    await act(async () => root.unmount())
+  })
+
+  it('完整快照展示独立计数和五层证据，不把低层事实升级为可用或已使用', async () => {
+    const { root } = await renderProjectWorkbench()
+    await openProjectSkills()
+
+    const page = document.querySelector('.project-skills-view')
+    expect(page).toBeTruthy()
+    expect(page.textContent).toContain('只读观察')
+    const metricValue = (label) => [...page.querySelectorAll('.project-skill-metric-card')]
+      .find((card) => card.querySelector('span')?.textContent === label)?.querySelector('strong')?.textContent
+    expect(metricValue('登记对象')).toBeUndefined()
+    expect(metricValue('登记项目')).toBe('2')
+    expect(metricValue('容器')).toBe('1')
+    expect(metricValue('未分类候选')).toBe('1')
+    expect(metricValue('项目内逻辑 Skill')).toBe('1')
+    expect(metricValue('文件观察')).toBeUndefined()
+    expect(metricValue('项目绑定证据')).toBeUndefined()
+    expect(metricValue('人工关联')).toBeUndefined()
+    expect(page.textContent).not.toContain('项目分类')
+
+    const projectMetric = page.querySelector('button[aria-label="查看登记项目详情"]')
+    await act(async () => {
+      projectMetric.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+    })
+    let classificationDrawer = document.querySelector('[role="dialog"]')
+    expect(classificationDrawer.textContent).toContain('登记项目')
+    expect(classificationDrawer.textContent).toContain('示例项目 Alpha')
+    expect(classificationDrawer.textContent).toContain('示例项目 Beta')
+    expect(classificationDrawer.textContent).not.toContain('container-codex')
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      await flush()
+    })
+    expect(document.activeElement).toBe(projectMetric)
+
+    const containerMetric = page.querySelector('button[aria-label="查看容器详情"]')
+    await act(async () => {
+      containerMetric.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+    })
+    classificationDrawer = document.querySelector('[role="dialog"]')
+    expect(classificationDrawer.textContent).toContain('登记容器')
+    expect(classificationDrawer.textContent).toContain('container-codex')
+    expect(classificationDrawer.textContent).toContain('不扫描')
+    expect(classificationDrawer.textContent).not.toContain('示例项目 Alpha')
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      await flush()
+    })
+
+    const projectSelect = page.querySelector('select[aria-label="选择项目文件夹"]')
+    expect(projectSelect).toBeTruthy()
+    expect(document.querySelector('.project-selected-library')).toBeNull()
+    await act(async () => {
+      projectSelect.value = 'project-alpha'
+      projectSelect.dispatchEvent(new Event('change', { bubbles: true }))
+      await flush()
+    })
+
+    expect(document.querySelector('.project-selected-library')?.textContent).toContain('工具链与工作流设计')
+    expect(document.querySelectorAll('.project-selected-library')).toHaveLength(1)
+    const skillSummary = document.querySelector('.project-skill-library-card .asset-card-main')
+    expect(skillSummary).toBeTruthy()
+    await act(async () => {
+      skillSummary.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+    })
+    const evidence = document.querySelector('[aria-label="Skill 五层证据"]')
+    expect(evidence).toBeTruthy()
+    expect(evidence.textContent).toContain('文件发现')
+    expect(evidence.textContent).toContain('项目绑定')
+    expect(evidence.textContent).toContain('宿主可用')
+    expect(evidence.textContent).toContain('调用资格')
+    expect(evidence.textContent).toContain('实际使用')
+    expect(evidence.textContent).toContain('已观察到文件')
+    expect(evidence.textContent).toContain('已观察到项目绑定候选')
+    expect(evidence.textContent).toContain('未核实')
+    expect(evidence.textContent).toContain('使用证据未接入')
+    expect(evidence.textContent).not.toContain('已安装')
+    expect(evidence.textContent).not.toContain('已可用')
+    expect(evidence.textContent).not.toContain('从未使用')
+    const projectDrawer = document.querySelector('[role="dialog"][aria-modal="true"]')
+    expect(projectDrawer).toBeTruthy()
+    expect(projectDrawer.textContent).toContain('三阶段内容生产编排')
+    expect(projectDrawer.textContent).toContain('中文覆盖 · 已复核')
+    expect(projectDrawer.textContent).toContain('frontmatter 原文')
+    expect(projectDrawer.textContent).toContain('三阶段内容制作流程。')
+    expect(projectDrawer.textContent).not.toContain('AI 生成')
+    expect(projectDrawer.textContent).toContain('启动并审核三阶段内容生产流程')
+    expect(projectDrawer.textContent).toContain('跳过阶段间人工确认')
+    expect(projectDrawer.textContent).toContain('从这版剧本启动流程')
+    expect(projectDrawer.textContent).toContain('能力简介')
+    expect(projectDrawer.textContent).toContain('适用场景')
+    expect(projectDrawer.textContent).toContain('不适用场景')
+    expect(projectDrawer.textContent).toContain('使用示意')
+    expect(projectDrawer.textContent).not.toContain('当前不作推断')
+    expect(projectDrawer.textContent).toContain('项目观察关系（不代表宿主可用）')
+    expect(projectDrawer.textContent).toContain('来源与身份')
+    expect(projectDrawer.textContent).toContain('frontmatter-only')
+    expect(projectDrawer.textContent).toContain('投影指纹')
+    expect(document.querySelector('.project-skill-library-card .detail-drawer')).toBeNull()
+    expect(document.querySelector('body > .detail-drawer')).toBeTruthy()
+    expect(document.querySelector('body > .drawer-scrim')).toBeTruthy()
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('关闭详情')
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      await flush()
+    })
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(document.activeElement).toBe(skillSummary)
+
+    await act(async () => root.unmount())
+  })
+
+  it('ai_draft 中文覆盖标注 AI 生成并保留英文原文', async () => {
+    const draftSnapshot = projectSkillSnapshot()
+    draftSnapshot.projects[0].logical_skills[0].localization = {
+      ...draftSnapshot.projects[0].logical_skills[0].localization,
+      status: 'ai_draft',
+    }
+    const { root } = await renderProjectWorkbench(projectWorkbenchFetch({
+      projectGet: response(projectSkillView(draftSnapshot)),
+    }))
+    await openProjectSkills()
+
+    const projectSelect = document.querySelector('select[aria-label="选择项目文件夹"]')
+    await act(async () => {
+      projectSelect.value = 'project-alpha'
+      projectSelect.dispatchEvent(new Event('change', { bubbles: true }))
+      await flush()
+    })
+
+    const card = document.querySelector('.project-skill-library-card')
+    expect(card.textContent).toContain('中文 · AI 生成')
+
+    await act(async () => {
+      card.querySelector('.asset-card-main').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+    })
+    const projectDrawer = document.querySelector('[role="dialog"][aria-modal="true"]')
+    expect(projectDrawer.textContent).toContain('中文覆盖 · AI 生成')
+    expect(projectDrawer.textContent).not.toContain('待人工确认')
+    expect(projectDrawer.textContent).toContain('frontmatter 原文')
+    expect(projectDrawer.textContent).toContain('三阶段内容制作流程。')
+    expect(projectDrawer.querySelectorAll('.ai-generated-tag')).toHaveLength(4)
+
+    await act(async () => root.unmount())
+  })
+
+  it('从项目下拉菜单选择其他文件夹并只读展示该项目 Skill', async () => {
+    const temporary = projectSkillSnapshot({
+      generation_id: 'b1b2c3d4e5f60001',
+      candidates: [],
+      projects: [{
+        ...projectSkillSnapshot().projects[0],
+        project_id: 'session-project:temporary1234',
+        relative_path: 'temporary-example-project',
+        display_name: '临时示例项目',
+      }],
+      human_associations: {
+        registry_id: 'project-skill-session-associations-v1',
+        confirmed_on: '2026-08-11',
+        items: [],
+      },
+    })
+    const fetchMock = projectWorkbenchFetch()
+    fetchMock.mockImplementation(async (url, options = {}) => {
+      if (url === '/api/health') return response({
+        ...health,
+        project_skill_snapshot: { available: true, refresh_state: 'idle', integrity: { degraded: false, errors: [] } },
+      })
+      if (url === '/api/snapshot') return response(snapshot(3, 'abcdefabcdef0001'))
+      if (url === '/api/collections/check') return response({ status: 'unchanged', reason: 'input_signature_match', stable: true, snapshot: collectionSnapshot() })
+      if (url === '/candidates/data.json') return response(candidateCatalog())
+      if (url === '/api/project-skills') return response(projectSkillView())
+      if (url === '/api/folder-picker') return response({
+        selected: true,
+        selection_token: 'project-skill-folder-token',
+        display_path: '~/Example/TemporaryProject',
+        expires_in: 120,
+      })
+      if (url === '/api/project-skills/folder-selection/confirm') return response({
+        snapshot: temporary,
+        selection: { mode: 'temporary', display_path: '~/Example/TemporaryProject' },
+      })
+      throw new Error(`unexpected ${url}`)
+    })
+    const { root } = await renderProjectWorkbench(fetchMock)
+    await openProjectSkills()
+
+    const select = document.querySelector('select[aria-label="选择项目文件夹"]')
+    await act(async () => {
+      select.value = '__choose_other_project_folder__'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+      await flush()
+    })
+    let dialog = document.querySelector('[role="dialog"]')
+    expect(dialog.textContent).toContain('选择其他项目文件夹')
+    expect(dialog.textContent).toContain('不加入项目登记')
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/folder-picker')).toBe(false)
+
+    const choose = [...dialog.querySelectorAll('button')].find((button) => button.textContent.includes('了解并选择'))
+    await act(async () => {
+      choose.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush(); await flush()
+    })
+    expect(fetchMock).toHaveBeenCalledWith('/api/folder-picker', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ target: 'project-skill-source' }),
+    }))
+    dialog = document.querySelector('[role="dialog"]')
+    expect(dialog.textContent).toContain('~/Example/TemporaryProject')
+
+    const confirm = [...dialog.querySelectorAll('button')].find((button) => button.textContent.includes('确认并读取项目 Skill'))
+    await act(async () => {
+      confirm.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush(); await flush()
+    })
+    expect(fetchMock).toHaveBeenCalledWith('/api/project-skills/folder-selection/confirm', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ selection_token: 'project-skill-folder-token' }),
+    }))
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(select.value).toBe('session-project:temporary1234')
+    expect([...select.options].some((option) => option.textContent === '临时：临时示例项目')).toBe(true)
+    expect(document.querySelector('.project-selected-library')?.textContent).toContain('临时示例项目')
+    expect(document.querySelectorAll('.project-selected-library')).toHaveLength(1)
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/project-skills/refresh')).toBe(false)
+    expect(fetchMock.mock.calls.some(([url]) => url === '/api/folder-selection/confirm')).toBe(false)
+
+    await act(async () => root.unmount())
+  })
+
+  it('部分刷新保留上一份完整快照，不把未确认对象显示为已删除', async () => {
+    const partial = response({
+      error: 'project_skill_scan_incomplete',
+      message: '本次项目 Skill 观察不完整，上一份有效快照未被覆盖',
+      scan_status: 'partial',
+      generation_id: 'deadbeefdead0001',
+    }, 422)
+    let projectReadCount = 0
+    const failedAttemptView = projectSkillView(projectSkillSnapshot(), {
+      last_attempt: {
+        schema_version: 1,
+        observation_boundary_ref: 'project-skill-observation-boundary-v1',
+        attempted_at: '2026-08-11T15:00:00Z',
+        attempt_generation_id: 'deadbeefdead0001',
+        scan_status: 'partial',
+        promoted: false,
+        matches_complete_snapshot: false,
+        complete_snapshot_generation_id: 'a1b2c3d4e5f60001',
+        issues: [
+          { status: 'partial', code: 'budget_exceeded', project_id: 'project-alpha' },
+          { status: 'security_reject', code: 'path_race', relative_path: '.agents/skills/example' },
+        ],
+      },
+    })
+    const { root } = await renderProjectWorkbench(projectWorkbenchFetch({
+      projectGet: () => {
+        projectReadCount += 1
+        return response(projectReadCount === 1 ? projectSkillView() : failedAttemptView)
+      },
+      projectRefresh: partial,
+    }))
+    await openProjectSkills()
+
+    const refreshButton = document.querySelector('button[aria-label="刷新项目 Skill"]')
+    await act(async () => {
+      refreshButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+      await flush()
+    })
+
+    expect(document.body.textContent).toContain('示例项目 Alpha')
+    const alert = document.querySelector('.project-skills-retained-note[role="alert"]')
+    expect(alert).toBeTruthy()
+    expect(alert.textContent).toContain('本次未能确认')
+    expect(alert.textContent).toContain('保留上一份完整结果')
+    expect(alert.textContent).toContain('不把未观察到的对象解释为已删除')
+    expect(alert.textContent).toContain('budget_exceeded')
+    expect(alert.textContent).toContain('path_race')
+
+    await act(async () => root.unmount())
+  })
+
+  it('辅助回执或 Markdown 降级时仍显示有效机器快照并明确降级', async () => {
+    const degraded = projectSkillView(projectSkillSnapshot(), {
+      last_attempt: null,
+      report: { available: false, generation_id: null },
+      integrity: {
+        degraded: true,
+        errors: ['last_attempt_missing', 'report_invalid'],
+      },
+    })
+    const { root } = await renderProjectWorkbench(projectWorkbenchFetch({
+      projectGet: response(degraded),
+    }))
+    await openProjectSkills()
+
+    expect(document.body.textContent).toContain('示例项目 Alpha')
+    const degradedNotice = document.querySelector('.project-skills-integrity-note')
+    expect(degradedNotice).toBeTruthy()
+    expect(degradedNotice.textContent).toContain('机器快照仍可读')
+    expect(degradedNotice.textContent).toContain('Markdown 总览未通过同代校验')
+    expect(document.body.textContent).not.toContain('/' + 'Users/')
+
+    await act(async () => root.unmount())
+  })
+
+  it('只读打开同代校验的 Markdown 总览且不请求 generated 静态路径', async () => {
+    const { root, fetchMock } = await renderProjectWorkbench(projectWorkbenchFetch())
+    await openProjectSkills()
+
+    const openButton = [...document.querySelectorAll('button')].find((button) =>
+      button.classList.contains('project-skills-report-open'),
+    )
+    expect(openButton).toBeTruthy()
+    await act(async () => {
+      openButton.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush()
+    })
+
+    const dialog = document.querySelector('[role="dialog"][aria-labelledby="project-skills-report-title"]')
+    expect(dialog).toBeTruthy()
+    expect(dialog.textContent).toContain('项目 Skill Markdown 总览')
+    expect(dialog.textContent).toContain('a1b2c3d4e5f60001')
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('关闭 Markdown 总览')
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/generated/project-skills/'))).toBe(false)
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      await flush()
+    })
+    expect(document.querySelector('#project-skills-report-title')).toBeNull()
+    expect(document.activeElement).toBe(openButton)
+    await act(async () => root.unmount())
+  })
+
+  it('人工关联与机器观察分区显示，不改写机器 Skill 计数', async () => {
+    const { root } = await renderProjectWorkbench()
+    await openProjectSkills()
+
+    const projectSelect = document.querySelector('select[aria-label="选择项目文件夹"]')
+    expect(projectSelect).toBeTruthy()
+    await act(async () => {
+      projectSelect.value = 'project-beta'
+      projectSelect.dispatchEvent(new Event('change', { bubbles: true }))
+      await flush()
+    })
+
+    const selected = document.querySelector('.project-selected-library')
+    const human = document.querySelector('[aria-label="人工关联"]')
+    expect(selected).toBeTruthy()
+    expect(human).toBeTruthy()
+    expect(selected.textContent).toContain('0 个 Skill')
+    expect(selected.textContent).toContain('当前项目没有可展示的 Skill')
+    expect(selected.querySelectorAll('.project-skill-library-card')).toHaveLength(0)
+    expect(human.textContent).toContain('apple-design')
+    expect(human.textContent).toContain('人工关联')
+    expect(human.textContent).toContain('不代表项目内已安装或当前宿主可用')
+
+    await act(async () => root.unmount())
+  })
+
+  it('将项目和 Skill 的危险元数据当作纯文本渲染', async () => {
+    const attack = '<img id="project-skill-xss" src=x onerror="window.__projectSkillXss=1">'
+    const unsafe = projectSkillSnapshot()
+    unsafe.projects = [
+      {
+        ...unsafe.projects[0],
+        display_name: attack,
+        logical_skills: [
+          {
+            ...unsafe.projects[0].logical_skills[0],
+            display_name: attack,
+          },
+        ],
+      },
+    ]
+    unsafe.human_associations = {
+      ...unsafe.human_associations,
+      items: [],
+    }
+    const { root } = await renderProjectWorkbench(projectWorkbenchFetch({
+      projectGet: response(projectSkillView(unsafe)),
+    }))
+    await openProjectSkills()
+
+    expect(document.querySelector('#project-skill-xss')).toBeNull()
+    expect(window.__projectSkillXss).toBeUndefined()
+    expect(document.querySelector('.project-skills-view')?.textContent).toContain(attack)
+
+    await act(async () => root.unmount())
+  })
+
+  it('项目 Skill 可从移动端导航直接到达', async () => {
+    const { root, fetchMock } = await renderProjectWorkbench()
+
+    const mobileEntry = projectNavButton('.bottom-nav')
+    expect(mobileEntry).toBeTruthy()
+    await openProjectSkills('.bottom-nav')
+
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/project-skills')).toHaveLength(1)
+    expect(document.querySelector('.topbar')?.textContent).toContain('项目 Skill')
+    expect(document.querySelector('.project-skills-view')).toBeTruthy()
 
     await act(async () => root.unmount())
   })

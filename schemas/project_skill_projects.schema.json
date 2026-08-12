@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.ai-os.invalid/schemas/project-skill-projects.schema.json",
+  "title": "AI-Toolbox project Skill project registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "registry_id",
+    "observation_boundary_ref",
+    "confirmed_on",
+    "projects"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "registry_id": {"$ref": "#/$defs/stable_id"},
+    "observation_boundary_ref": {"$ref": "#/$defs/stable_id"},
+    "confirmed_on": {"type": "string", "format": "date"},
+    "projects": {
+      "type": "array",
+      "maxItems": 256,
+      "items": {"$ref": "#/$defs/project"}
+    }
+  },
+  "$defs": {
+    "stable_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "pattern": "^[a-z0-9][a-z0-9._:-]*$"
+    },
+    "safe_text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "pattern": "^(?![\\s\\S]*(?:/[U]sers/|file://|https?://|-----BEGIN|<script|api[_ -]?key|authorization|bearer[ \\t]))[\\s\\S]+$"
+    },
+    "relative_path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "allOf": [
+        {"pattern": "^[^/\\\\\\u0000]+(?:/[^/\\\\\\u0000]+)*$"},
+        {"not": {"pattern": "(^|/)\\.{1,2}(/|$)"}},
+        {"not": {"pattern": "^[A-Za-z]:"}}
+      ]
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project_id",
+        "relative_path",
+        "classification",
+        "display_name"
+      ],
+      "properties": {
+        "project_id": {"$ref": "#/$defs/stable_id"},
+        "relative_path": {"$ref": "#/$defs/relative_path"},
+        "classification": {
+          "enum": [
+            "project",
+            "container",
+            "archive",
+            "excluded",
+            "unclassified"
+          ]
+        },
+        "display_name": {"$ref": "#/$defs/safe_text"},
+        "purpose": {"$ref": "#/$defs/safe_text"},
+        "parent_container_id": {"$ref": "#/$defs/stable_id"}
+      },
+      "if": {"required": ["parent_container_id"]},
+      "then": {"properties": {"classification": {"const": "project"}}}
+    }
+  }
+}

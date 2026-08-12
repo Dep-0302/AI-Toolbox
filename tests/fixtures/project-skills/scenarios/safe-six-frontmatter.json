@@ -1,0 +1,40 @@
+{
+  "scenario_version": 1,
+  "id": "safe-six-frontmatter",
+  "project": {
+    "project_id": "fixture-safe-six",
+    "relative_path": "fixture-safe-six",
+    "classification": "project"
+  },
+  "nodes": [
+    {
+      "type": "file",
+      "path": "fixture-safe-six/.agents/skills/safe-six/SKILL.md",
+      "source": "static/safe-six/SKILL.md"
+    },
+    {
+      "type": "file",
+      "path": "fixture-safe-six/.agents/skills/safe-six/agents/openai.yaml",
+      "source": "static/safe-six/agents/openai.yaml"
+    }
+  ],
+  "expected": {
+    "scan_status": "complete",
+    "projection": {
+      "name": "safe-six",
+      "description": "Synthetic manifest with all six approved fields.",
+      "version": "1.2.3",
+      "author": "Fixture Author",
+      "license": "Fixture-Only",
+      "agent_created": true
+    },
+    "invocation_eligibility": {
+      "state": "declaration_only",
+      "allow_implicit_invocation": false
+    },
+    "fingerprint_scope": "projection_sha256_v1",
+    "must_not_emit": [
+      "BODY_SENTINEL_PROJECT_SKILL_DO_NOT_READ_OR_EMIT"
+    ]
+  }
+}

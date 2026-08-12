@@ -1,0 +1,55 @@
+{
+  "scenario_version": 1,
+  "id": "malicious-frontmatter",
+  "project": {
+    "project_id": "fixture-malicious-frontmatter",
+    "relative_path": "fixture-malicious-frontmatter",
+    "classification": "project"
+  },
+  "nodes": [
+    {
+      "type": "file",
+      "case_id": "explicit-yaml-tag",
+      "path": "fixture-malicious-frontmatter/.agents/skills/explicit-tag/SKILL.md",
+      "content_utf8": "---\nname: !!python/object/new:tuple [fixture]\ndescription: Synthetic explicit tag.\n---\n"
+    },
+    {
+      "type": "file",
+      "case_id": "yaml-anchor-alias",
+      "path": "fixture-malicious-frontmatter/.agents/skills/anchor-alias/SKILL.md",
+      "content_utf8": "---\nname: anchor-alias\ndescription: &shared Synthetic anchored text.\nauthor: *shared\n---\n"
+    },
+    {
+      "type": "file",
+      "case_id": "unclosed-frontmatter",
+      "path": "fixture-malicious-frontmatter/.agents/skills/unclosed/SKILL.md",
+      "content_utf8": "---\nname: unclosed\ndescription: Closing delimiter intentionally absent.\n"
+    },
+    {
+      "type": "file",
+      "case_id": "invalid-utf8",
+      "path": "fixture-malicious-frontmatter/.agents/skills/invalid-utf8/SKILL.md",
+      "content_encoding": "base64",
+      "content_base64": "LS0tCm5hbWU6IGludmFsaWQt/wotLS0K"
+    },
+    {
+      "type": "file",
+      "case_id": "untrusted-markup",
+      "path": "fixture-malicious-frontmatter/.agents/skills/untrusted-markup/SKILL.md",
+      "content_utf8": "---\nname: untrusted-markup\ndescription: \"<script>fixture_marker()</script>\"\n---\n"
+    }
+  ],
+  "expected": {
+    "scan_status": "partial",
+    "cases": {
+      "explicit-yaml-tag": {"result": "rejected", "error_code": "unsafe_frontmatter"},
+      "yaml-anchor-alias": {"result": "rejected", "error_code": "unsafe_frontmatter"},
+      "unclosed-frontmatter": {"result": "rejected", "error_code": "invalid_frontmatter"},
+      "invalid-utf8": {"result": "rejected", "error_code": "invalid_encoding"},
+      "untrusted-markup": {"result": "observed", "render_as": "escaped_plain_text"}
+    },
+    "constructors_executed": 0,
+    "raw_html_rendered": false,
+    "body_read_count": 0
+  }
+}

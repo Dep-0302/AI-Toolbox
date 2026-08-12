@@ -59,6 +59,54 @@ def candidate_payload(
     }
 
 
+def project_skill_payload(*, scan_status: str = "complete") -> dict:
+    payload = {
+        "schema_version": 1,
+        "observation_boundary_ref": "project-skill-observation-boundary-v1",
+        "generation_id": "a" * 16,
+        "generated_at": FIXED_NOW,
+        "scan_status": scan_status,
+        "scan_scope": {
+            "trigger": "manual",
+            "execution": "foreground",
+            "network": "disabled",
+            "limits": {
+                "max_project_candidates": 256,
+                "max_entries_per_project": 1000,
+                "max_depth": 5,
+                "max_manifest_bytes": 262144,
+                "max_frontmatter_bytes": 32768,
+                "max_text_length": 4000,
+                "scan_timeout_seconds": 12,
+            },
+        },
+        "candidates": [],
+        "projects": [],
+        "human_associations": {
+            "registry_id": "fixture-associations-v1",
+            "confirmed_on": "2026-08-11",
+            "items": [],
+        },
+        "issues": [],
+    }
+    if scan_status == "complete":
+        payload["changes"] = {
+            "status": "not_available",
+            "reason": "no_prior_complete_snapshot",
+            "fingerprint_basis": "projection_sha256_v1",
+        }
+    else:
+        payload["issues"] = [
+            {
+                "issue_id": f"fixture-{scan_status}",
+                "status": scan_status,
+                "code": "fixture_incomplete",
+                "message": "fixture incomplete",
+            }
+        ]
+    return payload
+
+
 def temporary_pair(path: Path, *, marker: str = "current") -> dict:
     collection = {
         "schema_version": 3,
@@ -849,6 +897,50 @@ class WorkbenchStorageTests(unittest.TestCase):
                     selected = app.validate_selected_source_root(str(allowed))
                     self.assertEqual(selected["path"], allowed)
 
+    def test_selected_project_preview_is_one_in_memory_project_without_candidate_discovery(self) -> None:
+        with tempfile.TemporaryDirectory() as observation_temp:
+            observation_root = Path(observation_temp).resolve()
+            selected = observation_root / "009-selected-project"
+            skill = selected / ".agents" / "skills" / "sample-skill"
+            skill.mkdir(parents=True)
+            manifest = skill / "SKILL.md"
+            manifest.write_text(
+                "---\nname: sample-skill\ndescription: safe selected project skill\n---\nBODY_SECRET\n",
+                encoding="utf-8",
+            )
+            before = sorted(path.relative_to(selected).as_posix() for path in selected.rglob("*"))
+            with mock.patch.object(app, "PROJECT_SKILL_PRODUCTION_ROOT", observation_root):
+                identity = app._directory_identity_without_symlinks(selected)
+                payload = app.build_in_memory_project_skill_preview(
+                    selected,
+                    expected_identity=identity,
+                )
+            after = sorted(path.relative_to(selected).as_posix() for path in selected.rglob("*"))
+
+        self.assertEqual(payload["scan_status"], "complete")
+        self.assertEqual(payload["candidates"], [])
+        self.assertEqual(len(payload["projects"]), 1)
+        self.assertEqual(payload["projects"][0]["relative_path"], "009-selected-project")
+        self.assertEqual(len(payload["projects"][0]["logical_skills"]), 1)
+        self.assertEqual(payload["human_associations"]["items"], [])
+        self.assertNotIn(str(observation_root), json.dumps(payload, ensure_ascii=False))
+        self.assertNotIn("BODY_SECRET", json.dumps(payload, ensure_ascii=False))
+        self.assertEqual(before, after)
+
+    def test_selected_project_root_must_stay_inside_frozen_observation_root(self) -> None:
+        with tempfile.TemporaryDirectory() as observation_temp, tempfile.TemporaryDirectory() as outside_temp:
+            observation_root = Path(observation_temp).resolve()
+            inside = observation_root / "project"
+            outside = Path(outside_temp).resolve() / "outside"
+            inside.mkdir()
+            outside.mkdir()
+            with mock.patch.object(app, "PROJECT_SKILL_PRODUCTION_ROOT", observation_root):
+                selected = app.validate_selected_project_root(str(inside))
+                self.assertEqual(selected["relative_path"], "project")
+                with self.assertRaises(app.FolderSelectionError) as raised:
+                    app.validate_selected_project_root(str(outside))
+        self.assertEqual(raised.exception.reason, "project_folder_outside_observation_root")
+
     def test_concurrent_candidate_builds_are_serialized_and_keep_roots_isolated(self) -> None:
         class Builder:
             def __init__(self) -> None:
@@ -1071,6 +1163,7 @@ class WorkbenchHTTPTests(unittest.TestCase):
         self.root = Path(self.temporary.name).resolve()
         self.generated = self.root / "generated"
         self.generated.mkdir()
+        self.project_skills_generated = self.generated / "project-skills"
         self.web = self.root / "web"
         self.web.mkdir()
         (self.web / "index.html").write_text("<!doctype html><title>test</title>", encoding="utf-8")
@@ -1093,6 +1186,12 @@ class WorkbenchHTTPTests(unittest.TestCase):
             ),
             mock.patch.object(
                 app, "CANDIDATE_SNAPSHOT_PATH", self.generated / "candidate-catalog.json"
+            ),
+            mock.patch.object(
+                app,
+                "PROJECT_SKILL_OUTPUT_ROOT",
+                self.project_skills_generated,
+                create=True,
             ),
         ]
         for patcher in self.patchers:
@@ -1156,6 +1255,57 @@ class WorkbenchHTTPTests(unittest.TestCase):
             "X-AI-Toolbox-CSRF": self.server.csrf_token,
         }
 
+    def request_wire(
+        self,
+        path: str,
+        *,
+        headers: list[tuple[str, str]],
+        body: bytes = b"",
+    ) -> tuple[int, dict[str, str], dict]:
+        """Send exact HTTP/1.1 headers, including duplicates or no Content-Length."""
+
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", self.server.server_address[1], timeout=3
+        )
+        try:
+            connection.putrequest(
+                "POST",
+                path,
+                skip_host=True,
+                skip_accept_encoding=True,
+            )
+            connection.putheader("Host", f"127.0.0.1:{self.server.server_address[1]}")
+            connection.putheader("Connection", "close")
+            for name, value in headers:
+                connection.putheader(name, value)
+            connection.endheaders(body)
+            response = connection.getresponse()
+            raw = response.read()
+            return (
+                response.status,
+                dict(response.getheaders()),
+                json.loads(raw.decode("utf-8")),
+            )
+        finally:
+            connection.close()
+
+    def persistent_project_skill_boundary(self) -> Path:
+        boundary = json.loads(app.PROJECT_SKILL_BOUNDARY_PATH.read_text(encoding="utf-8"))
+        boundary["phase"] = "persistent_readonly_api"
+        boundary["data_contract"]["connections"] = {
+            "preview": True,
+            "scanner": True,
+            "api": True,
+            "ui": False,
+            "persistence": True,
+        }
+        boundary["persistence"]["current_phase_writes"] = list(
+            boundary["persistence"]["future_allowed_outputs"]
+        )
+        path = self.root / "project-skill-boundary.json"
+        path.write_text(json.dumps(boundary, ensure_ascii=False), encoding="utf-8")
+        return path
+
     def payload(self):
         payload = build_toolbox_payload(home=self.home, now=FIXED_NOW)
         return app._with_generation_id(app.validate_scan_payload(payload))
@@ -1164,6 +1314,7 @@ class WorkbenchHTTPTests(unittest.TestCase):
         status, headers, payload = self.request_json("/api/health")
         self.assertEqual(status, 200)
         self.assertEqual(payload["mode"], "observe-only")
+        self.assertEqual(payload["release_id"], "0.2.0-public")
         self.assertFalse(payload["degraded"])
         self.assertEqual(payload["errors"], [])
         self.assertFalse(payload["capabilities"]["host_mutation"])
@@ -1193,6 +1344,20 @@ class WorkbenchHTTPTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(payload["refresh_state"], "running")
 
+    def test_health_surfaces_project_skill_auxiliary_degradation(self) -> None:
+        view = {
+            "snapshot": {"generated_at": FIXED_NOW, "generation_id": "truth123456789ab"},
+            "last_attempt": None,
+            "report": {"available": False, "generation_id": None},
+            "integrity": {"degraded": True, "errors": ["report_invalid"]},
+        }
+        with mock.patch.object(app, "load_project_skill_api_view", return_value=view):
+            status, _, payload = self.request_json("/api/health")
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["degraded"])
+        self.assertIn("project_skill_auxiliary_invalid", payload["errors"])
+        self.assertEqual(payload["project_skill_snapshot"]["integrity"], view["integrity"])
+
     def test_snapshot_get_does_not_trigger_scan(self) -> None:
         with mock.patch.object(app, "scan_and_persist") as scan:
             status, _, payload = self.request_json("/api/snapshot")
@@ -1206,6 +1371,508 @@ class WorkbenchHTTPTests(unittest.TestCase):
         self.assertEqual(status, 404)
         self.assertEqual(payload["error"], "collection_snapshot_missing")
         scan.assert_not_called()
+
+    def test_project_skill_get_is_storage_only_and_missing_is_404(self) -> None:
+        self.assertFalse(self.project_skills_generated.exists())
+        with mock.patch.object(
+            app,
+            "scan_project_skills_and_persist",
+            side_effect=AssertionError("GET must not scan"),
+            create=True,
+        ), mock.patch.object(
+            app,
+            "build_project_skill_snapshot",
+            side_effect=AssertionError("GET must not build a scan"),
+            create=True,
+        ):
+            status, headers, payload = self.request_json("/api/project-skills")
+
+        self.assertEqual(status, 404)
+        self.assertEqual(payload["error"], "project_skill_snapshot_missing")
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertFalse(self.project_skills_generated.exists())
+
+    def test_project_skill_api_contract_mismatch_returns_503_before_build_or_store(self) -> None:
+        boundary = json.loads(app.PROJECT_SKILL_BOUNDARY_PATH.read_text(encoding="utf-8"))
+        boundary["phase"] = "non_persistent_preview"
+        boundary["data_contract"]["connections"] = {
+            "preview": True,
+            "scanner": True,
+            "api": False,
+            "ui": False,
+            "persistence": False,
+        }
+        boundary["persistence"]["current_phase_writes"] = []
+        boundary_path = self.root / "preview-only-boundary.json"
+        boundary_path.write_text(json.dumps(boundary, ensure_ascii=False), encoding="utf-8")
+
+        self.assertFalse(self.project_skills_generated.exists())
+        with mock.patch.object(
+            app, "PROJECT_SKILL_BOUNDARY_PATH", boundary_path
+        ), mock.patch.object(app, "build_project_skill_snapshot") as build, mock.patch.object(
+            app, "ProjectSkillStore"
+        ) as store:
+            status, _, payload = self.request_json(
+                "/api/project-skills/refresh",
+                method="POST",
+                data=b"{}",
+                headers=self.post_headers(),
+            )
+
+        self.assertEqual(status, 503)
+        self.assertEqual(payload, {"error": "project_skill_contract_unavailable"})
+        build.assert_not_called()
+        store.assert_not_called()
+        self.assertFalse(self.project_skills_generated.exists())
+
+    def test_project_skill_corrupt_snapshot_returns_stable_path_free_500(self) -> None:
+        self.project_skills_generated.mkdir()
+        snapshot = self.project_skills_generated / "snapshot.json"
+        snapshot.write_text("not-json", encoding="utf-8")
+
+        status, _, payload = self.request_json("/api/project-skills")
+
+        self.assertEqual(status, 500)
+        self.assertEqual(
+            payload,
+            {
+                "ok": False,
+                "error": "snapshot_invalid",
+                "resource": "project_skill_snapshot",
+            },
+        )
+        serialized = json.dumps(payload, ensure_ascii=False)
+        self.assertNotIn(str(self.root), serialized)
+        self.assertNotIn("snapshot.json", serialized)
+
+    def test_project_skill_get_returns_validated_snapshot_attempt_and_report_view(self) -> None:
+        snapshot = {"generation_id": "finalized1234567"}
+        attempt = {
+            "scan_status": "partial",
+            "promoted": False,
+            "complete_snapshot_generation_id": "finalized1234567",
+        }
+        store = mock.Mock()
+        store.load_snapshot.return_value = snapshot
+        store.load_last_attempt.return_value = attempt
+        store.load_markdown.return_value = "# safe derived report\n"
+        with mock.patch.object(app, "ProjectSkillStore", return_value=store), mock.patch.object(
+            app,
+            "build_project_skill_snapshot",
+            side_effect=AssertionError("GET must not scan"),
+        ):
+            status, _, payload = self.request_json("/api/project-skills")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            payload,
+            {
+                "snapshot": snapshot,
+                "last_attempt": attempt,
+                "report": {
+                    "available": True,
+                    "generation_id": "finalized1234567",
+                    "content": "# safe derived report\n",
+                },
+                "integrity": {"degraded": False, "errors": []},
+            },
+        )
+        store.load_snapshot.assert_called_once_with()
+        store.load_last_attempt.assert_called_once_with()
+        store.load_markdown.assert_called_once_with(expected_snapshot=snapshot)
+
+    def test_project_skill_get_internal_error_is_stable_json(self) -> None:
+        with mock.patch.object(
+            app, "load_project_skill_api_view", side_effect=RuntimeError("/private/fixture-project")
+        ):
+            status, _, payload = self.request_json("/api/project-skills")
+        self.assertEqual(status, 500)
+        self.assertEqual(payload["error"], "snapshot_invalid")
+        self.assertNotIn("/private/fixture-project", json.dumps(payload))
+
+    def test_project_skill_get_exposes_first_incomplete_attempt_without_snapshot(self) -> None:
+        attempt = {"scan_status": "partial", "promoted": False}
+        store = mock.Mock()
+        store.load_snapshot.return_value = None
+        store.load_last_attempt.return_value = attempt
+        with mock.patch.object(app, "ProjectSkillStore", return_value=store):
+            status, _, payload = self.request_json("/api/project-skills")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            payload,
+            {
+                "snapshot": None,
+                "last_attempt": attempt,
+                "report": {"available": False, "generation_id": None, "content": None},
+                "integrity": {"degraded": False, "errors": []},
+            },
+        )
+        store.load_markdown.assert_not_called()
+
+    def test_project_skill_get_rejects_stale_attempt_from_older_snapshot(self) -> None:
+        store = mock.Mock()
+        store.load_snapshot.return_value = {"generation_id": "newgeneration123"}
+        store.load_last_attempt.return_value = {
+            "complete_snapshot_generation_id": "oldgeneration123"
+        }
+        store.load_markdown.return_value = "# valid current report\n"
+        with mock.patch.object(app, "ProjectSkillStore", return_value=store):
+            status, _, payload = self.request_json("/api/project-skills")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["snapshot"]["generation_id"], "newgeneration123")
+        self.assertIsNone(payload["last_attempt"])
+        self.assertEqual(
+            payload["integrity"],
+            {"degraded": True, "errors": ["last_attempt_stale"]},
+        )
+        store.load_markdown.assert_called_once_with(
+            expected_snapshot={"generation_id": "newgeneration123"}
+        )
+
+    def test_project_skill_get_keeps_valid_lkg_when_derived_report_is_invalid(self) -> None:
+        generation = "currenttruth1234"
+        store = mock.Mock()
+        store.load_snapshot.return_value = {"generation_id": generation}
+        store.load_last_attempt.return_value = {
+            "complete_snapshot_generation_id": generation
+        }
+        store.load_markdown.side_effect = app.ProjectSkillPersistenceError("stale")
+        with mock.patch.object(app, "ProjectSkillStore", return_value=store):
+            status, _, payload = self.request_json("/api/project-skills")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["snapshot"]["generation_id"], generation)
+        self.assertEqual(
+            payload["report"],
+            {"available": False, "generation_id": None, "content": None},
+        )
+        self.assertEqual(
+            payload["integrity"], {"degraded": True, "errors": ["report_invalid"]}
+        )
+
+    def test_project_skill_get_marks_missing_attempt_beside_valid_snapshot(self) -> None:
+        generation = "currenttruth1234"
+        store = mock.Mock()
+        store.load_snapshot.return_value = {"generation_id": generation}
+        store.load_last_attempt.return_value = None
+        store.load_markdown.return_value = "# current\n"
+        with mock.patch.object(app, "ProjectSkillStore", return_value=store):
+            status, _, payload = self.request_json("/api/project-skills")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["snapshot"]["generation_id"], generation)
+        self.assertEqual(
+            payload["integrity"],
+            {"degraded": True, "errors": ["last_attempt_missing"]},
+        )
+
+    def test_project_skill_refresh_enforces_local_same_origin_json_csrf_and_size(self) -> None:
+        cases = (
+            (
+                "unsafe-host",
+                {"Host": "attacker.example", **self.post_headers()},
+                b"{}",
+                403,
+                "unsafe_host",
+            ),
+            (
+                "missing-origin",
+                {
+                    "Content-Type": "application/json",
+                    "X-AI-Toolbox-CSRF": self.server.csrf_token,
+                },
+                b"{}",
+                403,
+                "unsafe_origin",
+            ),
+            (
+                "cross-origin",
+                {**self.post_headers(), "Origin": "http://attacker.example"},
+                b"{}",
+                403,
+                "unsafe_origin",
+            ),
+            (
+                "wrong-content-type",
+                {**self.post_headers(), "Content-Type": "text/plain"},
+                b"{}",
+                415,
+                "content_type_required",
+            ),
+            (
+                "missing-csrf",
+                {"Content-Type": "application/json", "Origin": self.base},
+                b"{}",
+                403,
+                "invalid_csrf",
+            ),
+            (
+                "non-empty-object",
+                self.post_headers(),
+                b'{"path":"/private/fixture-project"}',
+                400,
+                "unexpected_fields",
+            ),
+            (
+                "non-object-json",
+                self.post_headers(),
+                b"[]",
+                400,
+                "unexpected_fields",
+            ),
+            (
+                "too-large",
+                self.post_headers(),
+                b"x" * (app.MAX_REQUEST_BYTES + 1),
+                413,
+                "request_too_large",
+            ),
+        )
+        with mock.patch.object(
+            app,
+            "scan_project_skills_and_persist",
+            side_effect=AssertionError("rejected request must not scan"),
+            create=True,
+        ):
+            for label, headers, body, expected_status, expected_error in cases:
+                with self.subTest(label=label):
+                    status, _, payload = self.request_json(
+                        "/api/project-skills/refresh",
+                        method="POST",
+                        data=body,
+                        headers=headers,
+                    )
+                    self.assertEqual(status, expected_status)
+                    self.assertEqual(payload["error"], expected_error)
+
+    def test_project_skill_refresh_method_and_registry_routes_are_closed(self) -> None:
+        status, _, payload = self.request_json("/api/project-skills/refresh")
+        self.assertEqual(status, 405)
+        self.assertEqual(payload["error"], "method_not_allowed")
+
+        for method, path, body, headers in (
+            ("GET", "/api/project-skills/registry", None, None),
+            (
+                "POST",
+                "/api/project-skills/registry",
+                b"{}",
+                self.post_headers(),
+            ),
+            (
+                "POST",
+                "/api/project-skills/refresh/001",
+                b"{}",
+                self.post_headers(),
+            ),
+        ):
+            with self.subTest(method=method, path=path):
+                status, _, payload = self.request_json(
+                    path,
+                    method=method,
+                    data=body,
+                    headers=headers,
+                )
+                self.assertEqual(status, 404)
+                self.assertEqual(payload["error"], "not_found")
+
+        for path in ("/api/project-skills", "/api/project-skills/refresh"):
+            with self.subTest(method="HEAD", path=path):
+                status, _, raw = self.request_raw(path, method="HEAD")
+                self.assertEqual(status, 405)
+                self.assertEqual(raw, b"")
+
+    def test_project_skill_refresh_rejects_ambiguous_http_framing_without_scan(self) -> None:
+        base_headers = [
+            ("Content-Type", "application/json"),
+            ("Origin", self.base),
+            ("X-AI-Toolbox-CSRF", self.server.csrf_token),
+        ]
+        cases = (
+            (
+                "transfer-encoding",
+                [*base_headers, ("Transfer-Encoding", "chunked"), ("Content-Length", "2")],
+                b"{}",
+                400,
+                "unsupported_transfer_encoding",
+            ),
+            (
+                "missing-content-length",
+                base_headers,
+                b"",
+                411,
+                "content_length_required",
+            ),
+            (
+                "duplicate-content-length",
+                [*base_headers, ("Content-Length", "2"), ("Content-Length", "2")],
+                b"{}",
+                400,
+                "invalid_content_length",
+            ),
+        )
+        with mock.patch.object(app, "scan_project_skills_and_persist") as scan:
+            for label, headers, body, expected_status, expected_error in cases:
+                with self.subTest(label=label):
+                    status, _, payload = self.request_wire(
+                        "/api/project-skills/refresh",
+                        headers=headers,
+                        body=body,
+                    )
+                    self.assertEqual(status, expected_status)
+                    self.assertEqual(payload["error"], expected_error)
+        scan.assert_not_called()
+
+    def test_project_skill_refresh_uses_dedicated_process_lock(self) -> None:
+        lock = self.server.project_skill_refresh_lock
+        lock.acquire()
+        try:
+            with mock.patch.object(
+                app,
+                "scan_project_skills_and_persist",
+                side_effect=AssertionError("conflict must not scan"),
+                create=True,
+            ):
+                status, _, payload = self.request_json(
+                    "/api/project-skills/refresh",
+                    method="POST",
+                    data=b"{}",
+                    headers=self.post_headers(),
+                )
+        finally:
+            lock.release()
+
+        self.assertEqual(status, 409)
+        self.assertEqual(payload["error"], "project_skill_refresh_in_progress")
+
+    def test_project_skill_refresh_does_not_wait_for_collection_source_lock(self) -> None:
+        completed = project_skill_payload()
+        self.server.source_state_lock.acquire()
+        try:
+            with mock.patch.object(
+                app, "scan_project_skills_and_persist", return_value=(True, completed)
+            ) as scan:
+                status, _, payload = self.request_json(
+                    "/api/project-skills/refresh",
+                    method="POST",
+                    data=b"{}",
+                    headers=self.post_headers(),
+                )
+        finally:
+            self.server.source_state_lock.release()
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["generation_id"], completed["generation_id"])
+        scan.assert_called_once_with()
+
+    def test_project_skill_generated_outputs_are_never_static_routes(self) -> None:
+        from urllib.parse import quote
+
+        for name in ("snapshot.json", "last-attempt.json", "项目Skill总览.md"):
+            with self.subTest(name=name):
+                status, _, raw = self.request_raw(
+                    f"/generated/project-skills/{quote(name)}"
+                )
+                self.assertEqual(status, 404)
+                self.assertNotIn(b"generation_id", raw)
+
+    def test_project_skill_complete_refresh_is_isolated_from_existing_scans(self) -> None:
+        completed = project_skill_payload()
+        with mock.patch.object(
+            app,
+            "scan_project_skills_and_persist",
+            return_value=(True, completed),
+            create=True,
+        ) as project_scan, mock.patch.object(app, "scan_and_persist") as host_scan, mock.patch.object(
+            app, "scan_collection_and_persist"
+        ) as collection_scan, mock.patch.object(
+            app, "scan_candidate_and_persist"
+        ) as candidate_scan:
+            status, _, payload = self.request_json(
+                "/api/project-skills/refresh",
+                method="POST",
+                data=b"{}",
+                headers=self.post_headers(),
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["generation_id"], completed["generation_id"])
+        project_scan.assert_called_once_with()
+        host_scan.assert_not_called()
+        collection_scan.assert_not_called()
+        candidate_scan.assert_not_called()
+
+    def test_project_skill_success_returns_store_finalized_snapshot(self) -> None:
+        boundary_path = self.persistent_project_skill_boundary()
+        scanner_payload = project_skill_payload()
+        scanner_payload["generation_id"] = "1" * 16
+        scanner_payload["changes"] = {
+            "status": "not_available",
+            "reason": "no_prior_complete_snapshot",
+            "fingerprint_basis": "projection_sha256_v1",
+        }
+        persisted = deepcopy(scanner_payload)
+        persisted["generation_id"] = "2" * 16
+        persisted["changes"] = {
+            "status": "compared",
+            "compared_to_generation_id": "3" * 16,
+            "fingerprint_basis": "projection_sha256_v1",
+            "added": [],
+            "changed": [],
+            "removed": [],
+        }
+        store = mock.Mock()
+        store.last_receipt_error = None
+        store.persist_scan_result.return_value = True
+        store.load_snapshot.return_value = persisted
+
+        with mock.patch.object(
+            app, "PROJECT_SKILL_BOUNDARY_PATH", boundary_path
+        ), mock.patch.object(
+            app, "build_project_skill_snapshot", return_value=scanner_payload
+        ) as build, mock.patch.object(
+            app, "ProjectSkillStore", return_value=store
+        ) as store_type:
+            status, _, payload = self.request_json(
+                "/api/project-skills/refresh",
+                method="POST",
+                data=b"{}",
+                headers=self.post_headers(),
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload, persisted)
+        self.assertNotEqual(payload["generation_id"], scanner_payload["generation_id"])
+        build.assert_called_once_with()
+        store_type.assert_called_once_with(app.PROJECT_SKILL_OUTPUT_ROOT.parents[1])
+        store.persist_scan_result.assert_called_once_with(scanner_payload)
+        store.load_snapshot.assert_called_once_with()
+
+    def test_project_skill_partial_and_error_refresh_return_422_and_preserve_lkg(self) -> None:
+        self.project_skills_generated.mkdir()
+        snapshot_path = self.project_skills_generated / "snapshot.json"
+        lkg = b'{"generation_id":"preserved-lkg"}\n'
+        snapshot_path.write_bytes(lkg)
+
+        for scan_status in ("partial", "error"):
+            with self.subTest(scan_status=scan_status):
+                incomplete = project_skill_payload(scan_status=scan_status)
+                with mock.patch.object(
+                    app,
+                    "scan_project_skills_and_persist",
+                    return_value=(False, incomplete),
+                    create=True,
+                ) as project_scan:
+                    status, _, payload = self.request_json(
+                        "/api/project-skills/refresh",
+                        method="POST",
+                        data=b"{}",
+                        headers=self.post_headers(),
+                    )
+
+                self.assertEqual(status, 422)
+                self.assertEqual(payload["error"], "project_skill_scan_incomplete")
+                self.assertEqual(payload["scan_status"], scan_status)
+                self.assertNotIn(str(self.root), json.dumps(payload, ensure_ascii=False))
+                self.assertEqual(snapshot_path.read_bytes(), lkg)
+                project_scan.assert_called_once_with()
 
     def test_refresh_rejects_missing_origin_and_csrf(self) -> None:
         status, _, payload = self.request_json(
@@ -1567,6 +2234,62 @@ class WorkbenchHTTPTests(unittest.TestCase):
                 self.assertEqual(status, 400)
                 self.assertEqual(response["error"], "unexpected_fields")
                 picker.assert_not_called()
+
+    def test_project_skill_folder_picker_uses_target_bound_token_and_in_memory_preview(self) -> None:
+        selected = {
+            "path": Path("/safe/project"),
+            "display_path": "~/Documents/safe-project",
+            "relative_path": "safe-project",
+            "device": 12,
+            "inode": 34,
+        }
+        preview = {"generation_id": "temporary1234567", "projects": [{}]}
+        with mock.patch.object(
+            app,
+            "run_native_folder_picker",
+            return_value={"selected": True, "cancelled": False, "path": "/safe/project"},
+        ), mock.patch.object(
+            app,
+            "validate_selected_project_root",
+            return_value=selected,
+        ):
+            status, _, picked = self.request_json(
+                "/api/folder-picker",
+                method="POST",
+                data=json.dumps({"target": "project-skill-source"}).encode(),
+                headers=self.post_headers(),
+            )
+
+        self.assertEqual(status, 200)
+        self.assertNotIn("path", picked)
+        with mock.patch.object(
+            app,
+            "build_in_memory_project_skill_preview",
+            return_value=preview,
+        ) as build:
+            status, _, payload = self.request_json(
+                "/api/project-skills/folder-selection/confirm",
+                method="POST",
+                data=json.dumps({"selection_token": picked["selection_token"]}).encode(),
+                headers=self.post_headers(),
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["snapshot"], preview)
+        self.assertEqual(payload["selection"], {
+            "mode": "temporary",
+            "display_path": "~/Documents/safe-project",
+        })
+        build.assert_called_once_with(Path("/safe/project"), expected_identity=(12, 34))
+
+        collection_token, _ = self.server.issue_folder_token(selected)
+        status, _, rejected = self.request_json(
+            "/api/project-skills/folder-selection/confirm",
+            method="POST",
+            data=json.dumps({"selection_token": collection_token}).encode(),
+            headers=self.post_headers(),
+        )
+        self.assertEqual(status, 409)
+        self.assertEqual(rejected["error"], "selection_token_target_mismatch")
 
     def test_folder_picker_returns_only_opaque_token_and_display_path(self) -> None:
         selection = {

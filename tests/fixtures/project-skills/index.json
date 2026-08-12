@@ -1,0 +1,34 @@
+{
+  "fixture_version": 1,
+  "kind": "project_skill_synthetic_fixture_index",
+  "dynamic_build_required": true,
+  "checked_in_symlinks_allowed": false,
+  "path_policy": "relative_to_temporary_root_only",
+  "data_policy": "synthetic_only",
+  "expectations": "expected.json",
+  "body_sentinels": [
+    "BODY_SENTINEL_PROJECT_SKILL_DO_NOT_READ_OR_EMIT",
+    "BODY_SENTINEL_BAIT_PATH_DO_NOT_READ_OR_EMIT",
+    "BODY_SENTINEL_CONTAINER_DO_NOT_READ_OR_EMIT",
+    "OUTSIDE_TARGET_SENTINEL_DO_NOT_READ_OR_EMIT",
+    "DESCENDANT_TARGET_SENTINEL_DO_NOT_READ_OR_EMIT",
+    "TOCTOU_TARGET_SENTINEL_DO_NOT_READ_OR_EMIT"
+  ],
+  "scenarios": [
+    {"id": "empty-entry", "spec": "scenarios/empty-entry.json"},
+    {"id": "missing-entry", "spec": "scenarios/missing-entry.json"},
+    {"id": "five-entities", "spec": "scenarios/five-entities.json"},
+    {"id": "safe-six-frontmatter", "spec": "scenarios/safe-six-frontmatter.json"},
+    {"id": "malicious-frontmatter", "spec": "scenarios/malicious-frontmatter.json"},
+    {"id": "metadata-limits", "spec": "scenarios/metadata-limits.json"},
+    {"id": "marketplace-bait", "spec": "scenarios/marketplace-bait.json"},
+    {"id": "multi-evidence", "spec": "scenarios/multi-evidence.json"},
+    {"id": "human-only", "spec": "scenarios/human-only.json"},
+    {"id": "codex-path-only", "spec": "scenarios/codex-path-only.json"},
+    {"id": "container-no-descent", "spec": "scenarios/container-no-descent.json"},
+    {"id": "entry-semantics", "spec": "scenarios/entry-semantics.json"},
+    {"id": "classification-matrix", "spec": "scenarios/classification-matrix.json"},
+    {"id": "excluded-boundaries", "spec": "scenarios/excluded-boundaries.json"},
+    {"id": "path-safety", "spec": "scenarios/path-safety.json"}
+  ]
+}

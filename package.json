@@ -1,7 +1,7 @@
 {
   "name": "ai-toolbox-workbench",
-  "version": "0.1.0",
-  "description": "Local, observe-only inventory for AI Skills, plugins, MCP servers, CLIs, and SDKs.",
+  "version": "0.2.0",
+  "description": "Local, observe-only inventory for AI capabilities and project-scoped Skills.",
   "private": true,
   "license": "MIT",
   "repository": {

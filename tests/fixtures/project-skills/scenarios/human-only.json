@@ -1,0 +1,35 @@
+{
+  "scenario_version": 1,
+  "id": "human-only",
+  "project": {
+    "project_id": "fixture-project-human",
+    "relative_path": "fixture-project-human",
+    "classification": "project"
+  },
+  "nodes": [
+    {"type": "directory", "path": "fixture-project-human/.agents/skills"}
+  ],
+  "machine_observation": {
+    "expected_manifest_read_count": 0,
+    "expected_file_observation_count": 0,
+    "expected_logical_skill_count": 0,
+    "expected_binding_evidence_count": 0
+  },
+  "human_associations": [
+    {
+      "association_id": "fixture-association-human-design",
+      "project_id": "fixture-project-human",
+      "skill_ref": "skill:design-guidance",
+      "reason": "Synthetic human memory only."
+    }
+  ],
+  "expected": {
+    "scan_status": "complete",
+    "human_association_count": 1,
+    "association_storage": "separate_from_machine_observation",
+    "association_upgrades_file_discovery": false,
+    "association_upgrades_project_binding": false,
+    "association_upgrades_host_availability": false,
+    "association_upgrades_actual_use": false
+  }
+}

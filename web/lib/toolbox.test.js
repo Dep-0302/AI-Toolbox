@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  candidateDescriptionState,
+  candidateDisplayItems,
+  candidateHealthFindings,
   categoriesFor,
   coverageNotice,
   filterAssets,
@@ -273,6 +276,154 @@ describe('toolbox data helpers', () => {
     ])
     expect(groups[0].severity).toBe('warning')
     expect(groups.find((group) => group.code === 'localization_stale').findings).toHaveLength(2)
+  })
+
+  it('separates truncated candidate summaries from real parsing errors', () => {
+    expect(candidateDescriptionState({ desc_flags: ['truncated'] })).toEqual({
+      parsingError: false,
+      truncated: true,
+    })
+    expect(candidateDescriptionState({ desc_flags: ['truncated', 'frontmatter_bleed'] })).toEqual({
+      parsingError: true,
+      truncated: false,
+    })
+    expect(candidateDescriptionState({ desc_flags: 'truncated' })).toEqual({
+      parsingError: false,
+      truncated: false,
+    })
+  })
+
+  it('projects candidate quality facts without inventing host asset identities', () => {
+    const findings = candidateHealthFindings({
+      items: [
+        {
+          uid: 'candidate-stale',
+          name: 'stale-skill',
+          zh_name: '待复核候选',
+          zh_state: 'stale',
+          desc_flags: ['truncated'],
+          src: '收藏/stale.skill',
+        },
+        {
+          uid: 'candidate-missing',
+          name: 'missing-skill',
+          zh_state: 'missing',
+          desc_flags: [],
+          installed: { hosts: ['codex', 'hermes'] },
+        },
+        {
+          uid: 'candidate-broken',
+          name: 'broken-skill',
+          desc_flags: ['desc_broken'],
+        },
+        {
+          uid: 'candidate-frontmatter',
+          name: 'frontmatter-skill',
+          desc_flags: ['truncated', 'frontmatter_bleed'],
+        },
+        {
+          uid: 'candidate-duplicate',
+          name: 'duplicate-stale-skill',
+          zh_state: 'stale',
+          desc_flags: ['truncated'],
+        },
+        {
+          uid: 'candidate-duplicate',
+          name: 'duplicate-stale-skill-second',
+          zh_state: 'stale',
+          desc_flags: ['truncated'],
+        },
+        {
+          uid: 'candidate-malformed-title',
+          zh_name: { bad: true },
+          name: 'safe-fallback-name',
+          zh_state: 'stale',
+        },
+        { uid: '__proto__', name: 'unsafe', zh_state: 'stale' },
+      ],
+    })
+
+    expect(findings).toHaveLength(6)
+    expect(findings.map((finding) => finding.code)).toEqual([
+      'candidate_localization_stale',
+      'candidate_description_truncated',
+      'candidate_localization_missing',
+      'candidate_description_broken',
+      'candidate_description_broken',
+      'candidate_localization_stale',
+    ])
+    expect(findings.every((finding) => finding.scope === 'candidate')).toBe(true)
+    expect(findings.every((finding) => !Object.hasOwn(finding, 'asset_id'))).toBe(true)
+    expect(findings.every((finding) => !Object.hasOwn(finding, 'installed'))).toBe(true)
+    expect(findings.every((finding) => !Object.hasOwn(finding, 'hosts'))).toBe(true)
+    expect(findings[0]).toMatchObject({
+      candidate_uid: 'candidate-stale',
+      title: '待复核候选',
+      severity: 'warning',
+      path: '收藏/stale.skill',
+    })
+    expect(findings.at(-1).title).toBe('safe-fallback-name')
+    expect(findings.some((finding) => finding.candidate_uid === 'candidate-duplicate')).toBe(false)
+    expect(candidateHealthFindings(null)).toEqual([])
+    expect(candidateHealthFindings({ items: 'bad' })).toEqual([])
+  })
+
+  it('builds a crash-safe candidate view and excludes every duplicate-UID row', () => {
+    const items = candidateDisplayItems({
+      items: [
+        null,
+        { uid: 'duplicate', name: 'first', chars: 10 },
+        { uid: 'duplicate', name: 'second', chars: 20 },
+        {
+          uid: 'safe',
+          name: 'safe-name',
+          zh_name: { bad: true },
+          zh_sum: ['bad'],
+          platform: 'bad',
+          inputs: [null, '参考图'],
+          tags: { bad: true },
+          chars: 'many',
+          shape: { total: 'bad', 参考资料: 2 },
+          installed: { hosts: ['codex', null] },
+        },
+      ],
+    })
+
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({
+      uid: 'safe',
+      name: 'safe-name',
+      zh_name: '',
+      zh_sum: '',
+      platform: [],
+      inputs: ['参考图'],
+      tags: [],
+      chars: 0,
+      shape: { 参考资料: 2 },
+      installed: { hosts: ['codex'] },
+    })
+  })
+
+  it('maps the frozen 4 stale, 5 missing, 19 truncated, and 1 broken fixture to 29 records', () => {
+    const items = []
+    for (let index = 0; index < 4; index += 1) {
+      items.push({ uid: `stale-${index}`, name: `stale-${index}`, zh_state: 'stale' })
+    }
+    for (let index = 0; index < 5; index += 1) {
+      items.push({ uid: `missing-${index}`, name: `missing-${index}`, zh_state: 'missing' })
+    }
+    for (let index = 0; index < 19; index += 1) {
+      items.push({ uid: `truncated-${index}`, name: `truncated-${index}`, desc_flags: ['truncated'] })
+    }
+    items.push({ uid: 'broken-0', name: 'broken-0', desc_flags: ['desc_broken'] })
+
+    const findings = candidateHealthFindings({ items })
+    const count = (code) => findings.filter((finding) => finding.code === code).length
+    expect(findings).toHaveLength(29)
+    expect(count('candidate_localization_stale')).toBe(4)
+    expect(count('candidate_localization_missing')).toBe(5)
+    expect(count('candidate_description_truncated')).toBe(19)
+    expect(count('candidate_description_broken')).toBe(1)
   })
 
   it('describes recent and older snapshot ages', () => {

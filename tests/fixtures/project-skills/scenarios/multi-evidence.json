@@ -1,0 +1,50 @@
+{
+  "scenario_version": 1,
+  "id": "multi-evidence",
+  "project": {
+    "project_id": "fixture-project-multi",
+    "relative_path": "fixture-project-multi",
+    "classification": "project"
+  },
+  "templates": {
+    "minimal_manifest": "---\nname: {{name}}\ndescription: Synthetic identity fixture {{name}}.\n---\n"
+  },
+  "nodes": [
+    {"type": "file", "path": "fixture-project-multi/.agents/skills/entity-01/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "entity-01"}}},
+    {"type": "file", "path": "fixture-project-multi/.agents/skills/entity-02/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "entity-02"}}},
+    {"type": "file", "path": "fixture-project-multi/.agents/skills/entity-03/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "entity-03"}}},
+    {"type": "file", "path": "fixture-project-multi/.agents/skills/entity-04/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "entity-04"}}},
+    {"type": "file", "path": "fixture-project-multi/.agents/plugins/bundle/skills/plugin-01/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "plugin-01"}}},
+    {"type": "file", "path": "fixture-project-multi/.agents/plugins/bundle/skills/plugin-02/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "plugin-02"}}},
+    {"type": "file", "path": "fixture-project-multi/.agents/plugins/bundle/skills/plugin-03/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "plugin-03"}}},
+    {"type": "file", "path": "fixture-project-multi/.agents/plugins/bundle/skills/plugin-04/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "plugin-04"}}},
+    {"type": "file", "path": "fixture-project-multi/.agents/plugins/bundle/skills/plugin-05/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "plugin-05"}}},
+    {"type": "file", "path": "fixture-project-multi/.agents/plugins/bundle/skills/plugin-06/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "plugin-06"}}}
+  ],
+  "dynamic_symlinks": [
+    {"path": "fixture-project-multi/.agents/skills/plugin-01", "target": "../plugins/bundle/skills/plugin-01"},
+    {"path": "fixture-project-multi/.agents/skills/plugin-02", "target": "../plugins/bundle/skills/plugin-02"},
+    {"path": "fixture-project-multi/.agents/skills/plugin-03", "target": "../plugins/bundle/skills/plugin-03"},
+    {"path": "fixture-project-multi/.agents/skills/plugin-04", "target": "../plugins/bundle/skills/plugin-04"},
+    {"path": "fixture-project-multi/.agents/skills/plugin-05", "target": "../plugins/bundle/skills/plugin-05"},
+    {"path": "fixture-project-multi/.agents/skills/plugin-06", "target": "../plugins/bundle/skills/plugin-06"}
+  ],
+  "identity_rule": {
+    "scope": "same_project_same_canonical_manifest",
+    "cross_project_hash_merge": false,
+    "linked_manifest_representation": "one_logical_skill_multiple_evidence"
+  },
+  "expected": {
+    "scan_status": "complete",
+    "entity_manifest_count": 4,
+    "project_link_count": 6,
+    "plugin_source_manifest_count": 6,
+    "logical_skill_count": 10,
+    "file_observation_count": 16,
+    "binding_evidence_count": 10,
+    "plugin_source_evidence_count": 6,
+    "linked_skill_evidence_count_each": 2,
+    "host_availability": "unverified",
+    "actual_use": "not_connected"
+  }
+}

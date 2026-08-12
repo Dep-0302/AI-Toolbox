@@ -1,0 +1,32 @@
+{
+  "scenario_version": 1,
+  "id": "codex-path-only",
+  "project": {
+    "project_id": "fixture-project-codex-path",
+    "relative_path": "fixture-project-codex-path",
+    "classification": "project"
+  },
+  "templates": {
+    "minimal_manifest": "---\nname: {{name}}\ndescription: Synthetic Codex path-only fixture {{name}}.\n---\n"
+  },
+  "nodes": [
+    {"type": "file", "path": "fixture-project-codex-path/.codex/skills/codex-01/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "codex-01"}}},
+    {"type": "file", "path": "fixture-project-codex-path/.codex/skills/codex-02/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "codex-02"}}},
+    {"type": "file", "path": "fixture-project-codex-path/.codex/skills/codex-03/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "codex-03"}}},
+    {"type": "file", "path": "fixture-project-codex-path/.codex/skills/codex-04/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "codex-04"}}},
+    {"type": "file", "path": "fixture-project-codex-path/.codex/skills/codex-05/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "codex-05"}}},
+    {"type": "file", "path": "fixture-project-codex-path/.codex/skills/codex-06/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "codex-06"}}},
+    {"type": "file", "path": "fixture-project-codex-path/.codex/skills/codex-07/SKILL.md", "content_template": {"name": "minimal_manifest", "variables": {"name": "codex-07"}}}
+  ],
+  "expected": {
+    "scan_status": "complete",
+    "manifest_read_count": 7,
+    "file_observation_count": 7,
+    "logical_skill_count": 7,
+    "binding_semantics": "observed_path_only",
+    "binding_evidence_count": 0,
+    "host_availability": "unverified",
+    "invocation_eligibility": "declaration_only",
+    "actual_use": "not_connected"
+  }
+}
