@@ -2764,6 +2764,48 @@ describe('项目 Skill 只读工作台', () => {
     await act(async () => root.unmount())
   })
 
+  it('项目文件夹越界时退出等待态并显示可操作的错误', async () => {
+    const fetchMock = projectWorkbenchFetch()
+    fetchMock.mockImplementation(async (url) => {
+      if (url === '/api/health') return response({
+        ...health,
+        project_skill_snapshot: { available: true, refresh_state: 'idle', integrity: { degraded: false, errors: [] } },
+      })
+      if (url === '/api/snapshot') return response(snapshot(3, 'abcdefabcdef0001'))
+      if (url === '/api/collections/check') return response({ status: 'unchanged', reason: 'input_signature_match', stable: true, snapshot: collectionSnapshot() })
+      if (url === '/candidates/data.json') return response(candidateCatalog())
+      if (url === '/api/project-skills') return response(projectSkillView())
+      if (url === '/api/folder-picker') return response({
+        error: 'project_folder_outside_observation_root',
+        message: '所选文件夹不在 Documents 观察根内；请选择其中的一个具体项目文件夹。',
+      }, 400)
+      throw new Error(`unexpected ${url}`)
+    })
+    const { root } = await renderProjectWorkbench(fetchMock)
+    await openProjectSkills()
+
+    const select = document.querySelector('select[aria-label="选择项目文件夹"]')
+    await act(async () => {
+      select.value = '__choose_other_project_folder__'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+      await flush()
+    })
+    let dialog = document.querySelector('[role="dialog"]')
+    const choose = [...dialog.querySelectorAll('button')].find((button) => button.textContent.includes('了解并选择'))
+    await act(async () => {
+      choose.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flush(); await flush()
+    })
+
+    dialog = document.querySelector('[role="dialog"]')
+    expect(dialog.textContent).toContain('所选文件夹不在 Documents 观察根内')
+    expect(dialog.textContent).not.toContain('系统文件夹窗口正在等待操作')
+    expect(dialog.textContent).not.toContain('project_folder_outside_observation_root')
+    expect([...dialog.querySelectorAll('button')].some((button) => button.textContent.includes('重新选择项目文件夹'))).toBe(true)
+
+    await act(async () => root.unmount())
+  })
+
   it('部分刷新保留上一份完整快照，不把未确认对象显示为已删除', async () => {
     const partial = response({
       error: 'project_skill_scan_incomplete',

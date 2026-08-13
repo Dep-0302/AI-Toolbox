@@ -21,11 +21,16 @@ SPEC.loader.exec_module(picker)
 
 
 class NativeFolderPickerTests(unittest.TestCase):
-    def run_macos(self, completed: subprocess.CompletedProcess[str]) -> tuple[int, dict]:
+    def run_macos(
+        self,
+        completed: subprocess.CompletedProcess[str],
+        *,
+        target: str = picker.COLLECTION_TARGET,
+    ) -> tuple[int, dict]:
         output = io.StringIO()
         with mock.patch.object(picker.subprocess, "run", return_value=completed) as run:
             with redirect_stdout(output):
-                result = picker._run_macos_picker()
+                result = picker._run_macos_picker(target)
         self.run_call = run.call_args
         return result, json.loads(output.getvalue())
 
@@ -56,6 +61,25 @@ class NativeFolderPickerTests(unittest.TestCase):
         self.assertIs(self.run_call.kwargs["shell"], False)
         self.assertIn("app.activate()", picker.MACOS_PICKER_SCRIPT)
         self.assertIn("app.chooseFolder", picker.MACOS_PICKER_SCRIPT)
+
+    def test_project_picker_uses_project_prompt_and_documents_start_location(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=json.dumps(
+                {"selected": True, "cancelled": False, "path": "/Users/example/Documents/project"}
+            ),
+            stderr="",
+        )
+
+        result, payload = self.run_macos(completed, target=picker.PROJECT_SKILL_TARGET)
+
+        self.assertEqual(result, 0)
+        self.assertTrue(payload["selected"])
+        script = self.run_call.args[0][-1]
+        self.assertEqual(script, picker.MACOS_PROJECT_SKILL_PICKER_SCRIPT)
+        self.assertIn("documents folder", script)
+        self.assertIn("项目文件夹", script)
 
     def test_macos_picker_maps_user_cancel_to_exact_cancel_payload(self) -> None:
         completed = subprocess.CompletedProcess(
@@ -109,15 +133,15 @@ class NativeFolderPickerTests(unittest.TestCase):
             ), mock.patch.object(
                 picker, "_run_macos_picker", return_value=7
             ) as macos, mock.patch.object(picker, "_run_tk_picker", return_value=8) as tk:
-                self.assertEqual(picker.main(), 7)
-                macos.assert_called_once_with()
+                self.assertEqual(picker.main([]), 7)
+                macos.assert_called_once_with(picker.COLLECTION_TARGET)
                 tk.assert_not_called()
 
         with mock.patch.object(picker.sys, "platform", "linux"), mock.patch.object(
             picker, "_run_macos_picker", return_value=7
         ) as macos, mock.patch.object(picker, "_run_tk_picker", return_value=8) as tk:
-            self.assertEqual(picker.main(), 8)
-            tk.assert_called_once_with()
+            self.assertEqual(picker.main([]), 8)
+            tk.assert_called_once_with(picker.COLLECTION_TARGET)
             macos.assert_not_called()
 
 
