@@ -2438,10 +2438,7 @@ def scan_project_skills_and_persist() -> tuple[bool, dict[str, Any]]:
     boundary = load_project_skill_runtime_boundary(PROJECT_SKILL_BOUNDARY_PATH)
     validate_project_skill_runtime_boundary(boundary, required_connection="api")
     root_state = load_project_skill_root_state(require_configured=True)
-    if (
-        root_state["root_id"] == "legacy-documents-root-v1"
-        and root_state["path"] == PROJECT_SKILL_PRODUCTION_ROOT.absolute()
-    ):
+    if root_state["path"] == PROJECT_SKILL_PRODUCTION_ROOT.absolute():
         projects_registry = None
         associations_registry = None
     else:

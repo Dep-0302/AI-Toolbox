@@ -2,6 +2,13 @@
 
 All notable public changes to AI-Toolbox are documented in this file.
 
+## 0.3.1 - 2026-08-13
+
+### Fixed
+
+- Re-selecting the same configured observation root no longer hides registered projects merely because the local root identity was regenerated.
+- Tracked project registries are reused only for the exact default Documents root; any different observation root still starts with the public empty Registry.
+
 ## 0.3.0 - 2026-08-13
 
 ### Added
