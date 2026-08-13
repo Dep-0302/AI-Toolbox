@@ -2,6 +2,14 @@
 
 All notable public changes to AI-Toolbox are documented in this file.
 
+## 0.2.2 - 2026-08-12
+
+### Fixed
+
+- Project folder selection now opens from the macOS Documents folder with project-specific guidance.
+- Rejected folders return safe, actionable Chinese messages instead of exposing internal error codes or leaving the dialog in a stale waiting state.
+- Project folder selection uses the dedicated Project Skill lock, so collection startup checks no longer produce false `refresh_in_progress` conflicts.
+
 ## 0.2.1 - 2026-08-12
 
 ### Security
