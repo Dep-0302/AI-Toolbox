@@ -526,6 +526,10 @@ export default function App() {
     } catch (error) {
       setFolderDialog((current) => current ? {
         ...current,
+        step: 'explain',
+        selectionToken: undefined,
+        displayPath: undefined,
+        expiresIn: undefined,
         error: error.payload?.message || `无法打开系统文件夹选择器：${error.message}`,
       } : current)
     } finally {
@@ -1218,7 +1222,11 @@ function FolderSourceDialog({ state, picker, busy, onChoose, onConfirm, onClose 
           ) : (
             <button className="refresh-button" onClick={onChoose} disabled={busy || !picker.available}>
               <FolderOpen size={17} />
-              {busy ? '等待系统窗口选择…' : '了解并选择'}
+              {busy
+                ? '等待系统窗口选择…'
+                : state.error
+                  ? projectSkillContext ? '重新选择项目文件夹' : '重新选择文件夹'
+                  : '了解并选择'}
             </button>
           )}
         </footer>

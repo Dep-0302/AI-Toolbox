@@ -19,6 +19,9 @@ MACOS_OSASCRIPT_PATH = Path("/usr/bin/osascript")
 MACOS_PICKER_TIMEOUT_SECONDS = 285
 CANCELLED = {"selected": False, "cancelled": True}
 FAILED = {"selected": False, "cancelled": False}
+COLLECTION_TARGET = "collection-source"
+PROJECT_SKILL_TARGET = "project-skill-source"
+ALLOWED_TARGETS = frozenset({COLLECTION_TARGET, PROJECT_SKILL_TARGET})
 MACOS_PICKER_SCRIPT = r"""
 (() => {
   const app = Application.currentApplication();
@@ -27,6 +30,30 @@ MACOS_PICKER_SCRIPT = r"""
   try {
     const folder = app.chooseFolder({
       withPrompt: "选择 AI-Toolbox 本次会话要读取的收藏文件夹",
+      multipleSelectionsAllowed: false,
+    });
+    return JSON.stringify({
+      selected: true,
+      cancelled: false,
+      path: folder.toString(),
+    });
+  } catch (error) {
+    if (Number(error.errorNumber) === -128) {
+      return JSON.stringify({selected: false, cancelled: true});
+    }
+    throw error;
+  }
+})()
+""".strip()
+MACOS_PROJECT_SKILL_PICKER_SCRIPT = r"""
+(() => {
+  const app = Application.currentApplication();
+  app.includeStandardAdditions = true;
+  app.activate();
+  try {
+    const folder = app.chooseFolder({
+      withPrompt: "选择 Documents 观察根内的具体项目文件夹",
+      defaultLocation: app.pathTo("documents folder"),
       multipleSelectionsAllowed: false,
     });
     return JSON.stringify({
@@ -71,8 +98,14 @@ def _validated_payload(raw: str) -> dict[str, object] | None:
     return None
 
 
-def _run_macos_picker() -> int:
+def _run_macos_picker(target: str = COLLECTION_TARGET) -> int:
     """Use macOS Standard Additions instead of the obsolete system Tk 8.5."""
+
+    script = (
+        MACOS_PROJECT_SKILL_PICKER_SCRIPT
+        if target == PROJECT_SKILL_TARGET
+        else MACOS_PICKER_SCRIPT
+    )
 
     try:
         completed = subprocess.run(
@@ -81,7 +114,7 @@ def _run_macos_picker() -> int:
                 "-l",
                 "JavaScript",
                 "-e",
-                MACOS_PICKER_SCRIPT,
+                script,
             ],
             shell=False,
             check=False,
@@ -104,7 +137,7 @@ def _run_macos_picker() -> int:
     return 0
 
 
-def _run_tk_picker() -> int:
+def _run_tk_picker(target: str = COLLECTION_TARGET) -> int:
     """Cross-platform fallback for environments with a supported Tk build."""
 
     try:
@@ -125,7 +158,16 @@ def _run_tk_picker() -> int:
         selected = filedialog.askdirectory(
             parent=root,
             mustexist=True,
-            title="选择 AI-Toolbox 本次会话要读取的收藏文件夹",
+            title=(
+                "选择 Documents 观察根内的具体项目文件夹"
+                if target == PROJECT_SKILL_TARGET
+                else "选择 AI-Toolbox 本次会话要读取的收藏文件夹"
+            ),
+            **(
+                {"initialdir": str(Path.home() / "Documents")}
+                if target == PROJECT_SKILL_TARGET
+                else {}
+            ),
         )
     except Exception:
         _emit(FAILED)
@@ -144,7 +186,15 @@ def _run_tk_picker() -> int:
     return 0
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    if not args:
+        target = COLLECTION_TARGET
+    elif len(args) == 2 and args[0] == "--target" and args[1] in ALLOWED_TARGETS:
+        target = args[1]
+    else:
+        _emit(FAILED)
+        return 2
     if sys.platform == "darwin":
         if (
             not MACOS_OSASCRIPT_PATH.is_file()
@@ -153,8 +203,8 @@ def main() -> int:
         ):
             _emit(FAILED)
             return 2
-        return _run_macos_picker()
-    return _run_tk_picker()
+        return _run_macos_picker(target)
+    return _run_tk_picker(target)
 
 
 if __name__ == "__main__":

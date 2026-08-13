@@ -1007,12 +1007,17 @@ class WorkbenchStorageTests(unittest.TestCase):
             "native_folder_picker_status",
             return_value={"available": True, "provider": "tkinter", "reason": None},
         ), mock.patch.object(app.subprocess, "run", return_value=completed) as run:
-            result = app.run_native_folder_picker()
+            result = app.run_native_folder_picker(app.PROJECT_SKILL_FOLDER_SELECTION_TARGET)
 
         self.assertTrue(result["selected"])
         self.assertEqual(
             run.call_args.args[0],
-            [app.sys.executable, str(app.NATIVE_FOLDER_PICKER_PATH)],
+            [
+                app.sys.executable,
+                str(app.NATIVE_FOLDER_PICKER_PATH),
+                "--target",
+                app.PROJECT_SKILL_FOLDER_SELECTION_TARGET,
+            ],
         )
         self.assertIs(run.call_args.kwargs["shell"], False)
 
@@ -1314,7 +1319,7 @@ class WorkbenchHTTPTests(unittest.TestCase):
         status, headers, payload = self.request_json("/api/health")
         self.assertEqual(status, 200)
         self.assertEqual(payload["mode"], "observe-only")
-        self.assertEqual(payload["release_id"], "0.2.1-public")
+        self.assertEqual(payload["release_id"], "0.2.2-public")
         self.assertFalse(payload["degraded"])
         self.assertEqual(payload["errors"], [])
         self.assertFalse(payload["capabilities"]["host_mutation"])
@@ -2192,7 +2197,7 @@ class WorkbenchHTTPTests(unittest.TestCase):
             )
         self.assertEqual(status, 200)
         self.assertEqual(response, {"selected": False, "cancelled": True})
-        picker.assert_called_once_with()
+        picker.assert_called_once_with(app.FOLDER_SELECTION_TARGET)
 
         with mock.patch.object(
             app,
@@ -2234,6 +2239,38 @@ class WorkbenchHTTPTests(unittest.TestCase):
                 self.assertEqual(status, 400)
                 self.assertEqual(response["error"], "unexpected_fields")
                 picker.assert_not_called()
+
+    def test_project_picker_outside_observation_root_returns_safe_message(self) -> None:
+        with mock.patch.object(
+            app,
+            "run_native_folder_picker",
+            return_value={
+                "selected": True,
+                "cancelled": False,
+                "path": "/outside/Documents/project",
+            },
+        ) as picker, mock.patch.object(
+            app,
+            "validate_selected_project_root",
+            side_effect=app.FolderSelectionError(
+                "project_folder_outside_observation_root"
+            ),
+        ):
+            status, _, response = self.request_json(
+                "/api/folder-picker",
+                method="POST",
+                data=json.dumps({"target": "project-skill-source"}).encode(),
+                headers=self.post_headers(),
+            )
+
+        self.assertEqual(status, 400)
+        self.assertEqual(response["error"], "project_folder_outside_observation_root")
+        self.assertEqual(
+            response["message"],
+            "所选文件夹不在 Documents 观察根内；请选择其中的一个具体项目文件夹。",
+        )
+        self.assertNotIn("/outside", json.dumps(response, ensure_ascii=False))
+        picker.assert_called_once_with(app.PROJECT_SKILL_FOLDER_SELECTION_TARGET)
 
     def test_project_skill_folder_picker_uses_target_bound_token_and_in_memory_preview(self) -> None:
         selected = {
@@ -2648,6 +2685,47 @@ class WorkbenchHTTPTests(unittest.TestCase):
                     self.assertEqual(response["error"], "refresh_in_progress")
         finally:
             self.server.refresh_lock.release()
+
+    def test_project_picker_uses_project_lock_and_returns_safe_busy_message(self) -> None:
+        self.server.refresh_lock.acquire()
+        try:
+            with mock.patch.object(
+                app,
+                "run_native_folder_picker",
+                return_value={"selected": False, "cancelled": True},
+            ) as picker:
+                status, _, response = self.request_json(
+                    "/api/folder-picker",
+                    method="POST",
+                    data=json.dumps({"target": "project-skill-source"}).encode(),
+                    headers=self.post_headers(),
+                )
+        finally:
+            self.server.refresh_lock.release()
+
+        self.assertEqual(status, 200)
+        self.assertEqual(response, {"selected": False, "cancelled": True})
+        picker.assert_called_once_with(app.PROJECT_SKILL_FOLDER_SELECTION_TARGET)
+
+        self.server.project_skill_refresh_lock.acquire()
+        try:
+            with mock.patch.object(app, "run_native_folder_picker") as picker:
+                status, _, response = self.request_json(
+                    "/api/folder-picker",
+                    method="POST",
+                    data=json.dumps({"target": "project-skill-source"}).encode(),
+                    headers=self.post_headers(),
+                )
+        finally:
+            self.server.project_skill_refresh_lock.release()
+
+        self.assertEqual(status, 409)
+        self.assertEqual(response["error"], "project_skill_refresh_in_progress")
+        self.assertEqual(
+            response["message"],
+            "项目 Skill 正在刷新，请稍后重新选择项目文件夹。",
+        )
+        picker.assert_not_called()
 
     def test_incomplete_collection_refresh_returns_422(self) -> None:
         incomplete = {

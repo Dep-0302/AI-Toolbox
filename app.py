@@ -46,13 +46,21 @@ CANDIDATE_CHECKER_PATH = CANDIDATES_DIR / "check_data.py"
 NATIVE_FOLDER_PICKER_PATH = SRC / "native_folder_picker.py"
 MACOS_OSASCRIPT_PATH = Path("/usr/bin/osascript")
 API_VERSION = "v1"
-RELEASE_ID = "0.2.1-public"
+RELEASE_ID = "0.2.2-public"
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 MAX_REQUEST_BYTES = 1024
 FOLDER_SELECTION_TTL_SECONDS = 120
 FOLDER_PICKER_TIMEOUT_SECONDS = 300
 FOLDER_SELECTION_TARGET = "collection-source"
 PROJECT_SKILL_FOLDER_SELECTION_TARGET = "project-skill-source"
+FOLDER_SELECTION_ERROR_MESSAGES = {
+    "project_folder_outside_observation_root": (
+        "所选文件夹不在 Documents 观察根内；请选择其中的一个具体项目文件夹。"
+    ),
+    "project_folder_not_scannable": (
+        "所选项目属于排除范围；请选择不是工作树、归档、缓存或临时目录的具体项目。"
+    ),
+}
 _CANDIDATE_MODULE_LOCK = threading.RLock()
 HOST_IDS = ("codex", "claude", "hermes", "workbuddy", "antigravity")
 HOST_LABELS = {
@@ -1644,15 +1652,25 @@ def native_folder_picker_status() -> dict[str, Any]:
     return {"available": True, "provider": "tkinter", "reason": None}
 
 
-def run_native_folder_picker() -> dict[str, Any]:
+def run_native_folder_picker(
+    target: str = FOLDER_SELECTION_TARGET,
+) -> dict[str, Any]:
     """Invoke only the fixed project helper with this exact Python executable."""
+
+    if target not in {FOLDER_SELECTION_TARGET, PROJECT_SKILL_FOLDER_SELECTION_TARGET}:
+        raise FolderSelectionError("picker_target_invalid")
 
     status = native_folder_picker_status()
     if not status["available"]:
         raise FolderSelectionError(status["reason"] or "picker_unavailable")
     try:
         completed = subprocess.run(
-            [sys.executable, str(NATIVE_FOLDER_PICKER_PATH)],
+            [
+                sys.executable,
+                str(NATIVE_FOLDER_PICKER_PATH),
+                "--target",
+                target,
+            ],
             shell=False,
             check=False,
             capture_output=True,
@@ -2748,24 +2766,32 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
         if not valid_body:
             self._json(HTTPStatus.BAD_REQUEST, {"error": "unexpected_fields"})
             return
+        project_skill_operation = path in {
+            "/api/project-skills/refresh",
+            "/api/project-skills/folder-selection/confirm",
+        }
+        if (
+            path == "/api/folder-picker"
+            and body.get("target") == PROJECT_SKILL_FOLDER_SELECTION_TARGET
+        ):
+            project_skill_operation = True
         refresh_lock = (
             self.server.project_skill_refresh_lock
-            if path in {
-                "/api/project-skills/refresh",
-                "/api/project-skills/folder-selection/confirm",
-            }
+            if project_skill_operation
             else self.server.refresh_lock
         )
         if not refresh_lock.acquire(blocking=False):
+            error = (
+                "project_skill_refresh_in_progress"
+                if project_skill_operation
+                else "refresh_in_progress"
+            )
+            payload = {"error": error}
+            if project_skill_operation:
+                payload["message"] = "项目 Skill 正在刷新，请稍后重新选择项目文件夹。"
             self._json(
                 HTTPStatus.CONFLICT,
-                {
-                    "error": (
-                        "project_skill_refresh_in_progress"
-                        if path.startswith("/api/project-skills/")
-                        else "refresh_in_progress"
-                    )
-                },
+                payload,
             )
             return
         try:
@@ -2812,11 +2838,11 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
             try:
                 temporary = self.server.temporary_source()
                 if path == "/api/folder-picker":
-                    picked = run_native_folder_picker()
+                    target = body["target"]
+                    picked = run_native_folder_picker(target)
                     if picked == {"selected": False, "cancelled": True}:
                         self._json(HTTPStatus.OK, picked)
                         return
-                    target = body["target"]
                     selection = (
                         validate_selected_project_root(picked["path"])
                         if target == PROJECT_SKILL_FOLDER_SELECTION_TARGET
@@ -2947,7 +2973,11 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                     status = HTTPStatus.SERVICE_UNAVAILABLE
                 else:
                     status = HTTPStatus.BAD_REQUEST
-                self._json(status, {"error": exc.reason})
+                error_payload = {"error": exc.reason}
+                message = FOLDER_SELECTION_ERROR_MESSAGES.get(exc.reason)
+                if message is not None:
+                    error_payload["message"] = message
+                self._json(status, error_payload)
                 return
             except Exception:
                 if path == "/api/refresh":
