@@ -2686,6 +2686,47 @@ class WorkbenchHTTPTests(unittest.TestCase):
         finally:
             self.server.refresh_lock.release()
 
+    def test_project_picker_uses_project_lock_and_returns_safe_busy_message(self) -> None:
+        self.server.refresh_lock.acquire()
+        try:
+            with mock.patch.object(
+                app,
+                "run_native_folder_picker",
+                return_value={"selected": False, "cancelled": True},
+            ) as picker:
+                status, _, response = self.request_json(
+                    "/api/folder-picker",
+                    method="POST",
+                    data=json.dumps({"target": "project-skill-source"}).encode(),
+                    headers=self.post_headers(),
+                )
+        finally:
+            self.server.refresh_lock.release()
+
+        self.assertEqual(status, 200)
+        self.assertEqual(response, {"selected": False, "cancelled": True})
+        picker.assert_called_once_with(app.PROJECT_SKILL_FOLDER_SELECTION_TARGET)
+
+        self.server.project_skill_refresh_lock.acquire()
+        try:
+            with mock.patch.object(app, "run_native_folder_picker") as picker:
+                status, _, response = self.request_json(
+                    "/api/folder-picker",
+                    method="POST",
+                    data=json.dumps({"target": "project-skill-source"}).encode(),
+                    headers=self.post_headers(),
+                )
+        finally:
+            self.server.project_skill_refresh_lock.release()
+
+        self.assertEqual(status, 409)
+        self.assertEqual(response["error"], "project_skill_refresh_in_progress")
+        self.assertEqual(
+            response["message"],
+            "项目 Skill 正在刷新，请稍后重新选择项目文件夹。",
+        )
+        picker.assert_not_called()
+
     def test_incomplete_collection_refresh_returns_422(self) -> None:
         incomplete = {
             "generated_at": FIXED_NOW,

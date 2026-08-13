@@ -2766,24 +2766,32 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
         if not valid_body:
             self._json(HTTPStatus.BAD_REQUEST, {"error": "unexpected_fields"})
             return
+        project_skill_operation = path in {
+            "/api/project-skills/refresh",
+            "/api/project-skills/folder-selection/confirm",
+        }
+        if (
+            path == "/api/folder-picker"
+            and body.get("target") == PROJECT_SKILL_FOLDER_SELECTION_TARGET
+        ):
+            project_skill_operation = True
         refresh_lock = (
             self.server.project_skill_refresh_lock
-            if path in {
-                "/api/project-skills/refresh",
-                "/api/project-skills/folder-selection/confirm",
-            }
+            if project_skill_operation
             else self.server.refresh_lock
         )
         if not refresh_lock.acquire(blocking=False):
+            error = (
+                "project_skill_refresh_in_progress"
+                if project_skill_operation
+                else "refresh_in_progress"
+            )
+            payload = {"error": error}
+            if project_skill_operation:
+                payload["message"] = "项目 Skill 正在刷新，请稍后重新选择项目文件夹。"
             self._json(
                 HTTPStatus.CONFLICT,
-                {
-                    "error": (
-                        "project_skill_refresh_in_progress"
-                        if path.startswith("/api/project-skills/")
-                        else "refresh_in_progress"
-                    )
-                },
+                payload,
             )
             return
         try:
