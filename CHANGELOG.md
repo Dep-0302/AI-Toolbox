@@ -2,6 +2,26 @@
 
 All notable public changes to AI-Toolbox are documented in this file.
 
+## 0.3.0 - 2026-08-13
+
+### Added
+
+- A native, local-only Project Skill observation-root selector; the public build starts unconfigured instead of assuming one user's Documents layout.
+- Persistent local monitoring for explicitly selected projects, including safe removal by stable project ID.
+- A build-and-source identity handshake so the macOS launcher does not reuse a stale service from another checkout.
+
+### Changed
+
+- One selected project is shown at a time, while registered projects, containers, saved projects, and evidence remain separate.
+- Selecting an already registered project now reuses that registration instead of adding a duplicate saved-project entry.
+- Saved projects display their selected project-directory name, persist across service restarts, and may live outside the configured observation root without expanding root discovery.
+
+### Privacy and safety
+
+- Observation-root and saved-project state is written only to ignored `0600` files under `generated/project-skills/`.
+- Removing monitoring never deletes or modifies the observed project.
+- The public project and association registries remain empty; release artifacts contain no local root, saved-project state, personal path, or generated snapshot.
+
 ## 0.2.2 - 2026-08-12
 
 ### Fixed

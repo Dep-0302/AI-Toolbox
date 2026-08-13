@@ -37,6 +37,7 @@ COLLECTION_LOCK_PATH = GENERATED_DIR / ".collection-refresh.lock"
 COLLECTION_SIGNATURE_PATH = GENERATED_DIR / "collection-signature.json"
 CANDIDATE_SNAPSHOT_PATH = GENERATED_DIR / "candidate-catalog.json"
 PROJECT_SKILL_OUTPUT_ROOT = GENERATED_DIR / "project-skills"
+WORKBENCH_IDENTITY_PATH = ROOT / "registry" / "workbench_identity.json"
 COLLECTION_SIGNATURE_SCHEMA_VERSION = 1
 DIST_DIR = ROOT / "dist"
 # 候选 builder/checker 只作为固定项目内模块载入；不通过 HTTP 静态暴露。
@@ -45,23 +46,69 @@ CANDIDATE_BUILDER_PATH = CANDIDATES_DIR / "workbench.py"
 CANDIDATE_CHECKER_PATH = CANDIDATES_DIR / "check_data.py"
 NATIVE_FOLDER_PICKER_PATH = SRC / "native_folder_picker.py"
 MACOS_OSASCRIPT_PATH = Path("/usr/bin/osascript")
-API_VERSION = "v1"
-RELEASE_ID = "0.2.2-public"
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 MAX_REQUEST_BYTES = 1024
 FOLDER_SELECTION_TTL_SECONDS = 120
 FOLDER_PICKER_TIMEOUT_SECONDS = 300
 FOLDER_SELECTION_TARGET = "collection-source"
 PROJECT_SKILL_FOLDER_SELECTION_TARGET = "project-skill-source"
+PROJECT_SKILL_ROOT_SELECTION_TARGET = "project-skill-observation-root"
+SYSTEM_FOLDER_RANGES = (
+    Path("/System"),
+    Path("/Library"),
+    Path("/Applications"),
+    Path("/usr"),
+    Path("/bin"),
+    Path("/sbin"),
+    Path("/etc"),
+    Path("/opt"),
+    Path("/dev"),
+    Path("/private/etc"),
+    Path("/private/var/db"),
+    Path("/private/var/root"),
+    Path("/private/var/audit"),
+    Path("/private/var/log"),
+)
 FOLDER_SELECTION_ERROR_MESSAGES = {
-    "project_folder_outside_observation_root": (
-        "所选文件夹不在 Documents 观察根内；请选择其中的一个具体项目文件夹。"
-    ),
     "project_folder_not_scannable": (
         "所选项目属于排除范围；请选择不是工作树、归档、缓存或临时目录的具体项目。"
     ),
+    "project_skill_root_not_configured": "尚未选择项目 Skill 观察根。",
+    "project_skill_root_changed": "项目 Skill 观察根的磁盘身份已变化，请重新选择。",
 }
 _CANDIDATE_MODULE_LOCK = threading.RLock()
+
+
+def load_workbench_identity(path: Path = WORKBENCH_IDENTITY_PATH) -> dict[str, Any]:
+    try:
+        if path.is_symlink():
+            raise ValueError("unsafe identity file")
+        raw = path.read_bytes()
+        if len(raw) > 4096:
+            raise ValueError("oversized identity file")
+        payload = json.loads(raw.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise RuntimeError("workbench identity unavailable") from exc
+    if (
+        not isinstance(payload, dict)
+        or set(payload) != {"schema_version", "app", "api_version", "build_id"}
+        or payload["schema_version"] != 1
+        or payload["app"] != "ai-toolbox-workbench"
+        or payload["api_version"] != "v1"
+        or not isinstance(payload["build_id"], str)
+        or re.fullmatch(r"[a-z0-9][a-z0-9._-]{7,79}", payload["build_id"]) is None
+    ):
+        raise RuntimeError("workbench identity invalid")
+    return {
+        **payload,
+        "source_id": hashlib.sha256(
+            os.fsencode(str(ROOT.resolve(strict=True)))
+        ).hexdigest()[:16],
+    }
+
+
+WORKBENCH_IDENTITY = load_workbench_identity()
+API_VERSION = WORKBENCH_IDENTITY["api_version"]
 HOST_IDS = ("codex", "claude", "hermes", "workbuddy", "antigravity")
 HOST_LABELS = {
     "codex": "Codex",
@@ -141,6 +188,20 @@ from project_skill_scan import (  # noqa: E402
 from project_skill_report import (  # noqa: E402
     ProjectSkillPersistenceError,
     ProjectSkillStore,
+)
+from project_skill_root import (  # noqa: E402
+    ProjectSkillRootError,
+    build_project_skill_root_config,
+    load_project_skill_root_config,
+    write_project_skill_root_config,
+)
+from project_skill_saved_projects import (  # noqa: E402
+    SavedProjectError,
+    load_saved_projects,
+    remove_saved_project,
+    saved_projects_api_view,
+    upsert_saved_project,
+    write_saved_projects,
 )
 
 
@@ -1498,6 +1559,9 @@ def validate_selected_source_root(value: Any) -> dict[str, Any]:
     home = Path.home().absolute()
     broad_roots = {
         Path(os.sep),
+        home.parent,
+        Path("/Volumes"),
+        Path("/Network"),
         home,
         home / "Desktop",
         home / "Documents",
@@ -1506,6 +1570,8 @@ def validate_selected_source_root(value: Any) -> dict[str, Any]:
     }
     if path in broad_roots:
         raise FolderSelectionError("folder_root_too_broad")
+    if any(_is_relative_to(path, protected) for protected in SYSTEM_FOLDER_RANGES):
+        raise FolderSelectionError("folder_root_sensitive")
 
     project_and_host_ranges = {
         ROOT.absolute(),
@@ -1546,19 +1612,139 @@ def validate_selected_source_root(value: Any) -> dict[str, Any]:
     }
 
 
+def validate_selected_observation_root(value: Any) -> dict[str, Any]:
+    """Validate one explicit long-lived Project Skill observation root."""
+
+    if not isinstance(value, str) or not value or "\x00" in value:
+        raise FolderSelectionError("folder_path_invalid")
+    raw = Path(value).expanduser()
+    if not raw.is_absolute() or any(part in {".", ".."} for part in raw.parts):
+        raise FolderSelectionError("folder_path_not_canonical")
+    path = Path(os.path.normpath(str(raw)))
+    home = Path.home().absolute()
+    if path in {
+        Path(os.sep),
+        home.parent,
+        Path("/Volumes"),
+        Path("/Network"),
+        home,
+        home / "Library",
+        home / "Downloads",
+    }:
+        raise FolderSelectionError("folder_root_too_broad")
+    if any(_is_relative_to(path, protected) for protected in SYSTEM_FOLDER_RANGES):
+        raise FolderSelectionError("folder_root_sensitive")
+    protected_descendants = {
+        ROOT.absolute(),
+        GENERATED_DIR.absolute(),
+        home / ".codex",
+        home / ".claude",
+        home / ".hermes",
+        home / ".workbuddy",
+        home / ".antigravity",
+        home / ".agents",
+        home / ".ssh",
+        home / ".gnupg",
+        home / ".aws",
+        home / ".kube",
+        home / ".docker",
+        home / ".config",
+        home / ".local",
+        home / "Library" / "Keychains",
+        home / "Library" / "Application Support",
+        home / "Library" / "Containers",
+        home / "Library" / "Group Containers",
+    }
+    if any(_is_relative_to(path, protected) for protected in protected_descendants):
+        raise FolderSelectionError("folder_root_protected")
+    device, inode = _directory_identity_without_symlinks(path)
+    return {
+        "path": path,
+        "display_path": _display_path(path),
+        "device": device,
+        "inode": inode,
+    }
+
+
 def validate_selected_project_root(value: Any) -> dict[str, Any]:
-    """Validate a picker-selected project inside the frozen Documents root."""
+    """Validate one exact picker-selected project without scanning its parent."""
 
     selected = validate_selected_source_root(value)
-    root = PROJECT_SKILL_PRODUCTION_ROOT.absolute()
     path = selected["path"]
-    try:
-        relative = path.relative_to(root)
-    except ValueError:
-        raise FolderSelectionError("project_folder_outside_observation_root") from None
-    if not relative.parts or any(part in PROJECT_SKILL_EXCLUDED_NAMES for part in relative.parts):
+    if not path.name or "\\" in path.name or path.name in PROJECT_SKILL_EXCLUDED_NAMES:
         raise FolderSelectionError("project_folder_not_scannable")
-    return {**selected, "relative_path": relative.as_posix()}
+    return selected
+
+
+def load_project_skill_root_state(*, require_configured: bool = False) -> dict[str, Any]:
+    """Load and revalidate the one local root setting without scanning it."""
+
+    config = load_project_skill_root_config(ROOT)
+    if config is None:
+        if require_configured:
+            raise ProjectSkillRootError("project_skill_root_not_configured")
+        return {
+            "configured": False,
+            "root_id": None,
+            "display_path": None,
+            "configured_at": None,
+        }
+    selected = validate_selected_observation_root(config["path"])
+    if (selected["device"], selected["inode"]) != (config["device"], config["inode"]):
+        raise ProjectSkillRootError("project_skill_root_changed")
+    return {
+        "configured": True,
+        "root_id": config["root_id"],
+        "display_path": selected["display_path"],
+        "configured_at": config["configured_at"],
+        "path": selected["path"],
+        "device": selected["device"],
+        "inode": selected["inode"],
+    }
+
+
+def project_skill_root_payload(state: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        "configured": bool(state["configured"]),
+        "root_id": state.get("root_id"),
+        "display_path": state.get("display_path"),
+        "configured_at": state.get("configured_at"),
+    }
+
+
+def configure_project_skill_root(record: Mapping[str, Any]) -> dict[str, Any]:
+    selected = validate_selected_observation_root(str(record["path"]))
+    if (selected["device"], selected["inode"]) != (record["device"], record["inode"]):
+        raise FolderSelectionError("folder_identity_changed")
+    config = build_project_skill_root_config(
+        selected["path"],
+        device=selected["device"],
+        inode=selected["inode"],
+        configured_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    )
+    write_project_skill_root_config(config, ROOT)
+    return load_project_skill_root_state(require_configured=True)
+
+
+def _empty_project_skill_registries(root_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    suffix = hashlib.sha256(root_id.encode("utf-8")).hexdigest()[:12]
+    confirmed_on = datetime.now(timezone.utc).date().isoformat()
+    return (
+        {
+            "schema_version": 1,
+            "registry_id": f"project-skill-projects-{suffix}",
+            "observation_boundary_ref": PROJECT_SKILL_BOUNDARY_ID,
+            "confirmed_on": confirmed_on,
+            "projects": [],
+        },
+        {
+            "schema_version": 1,
+            "registry_id": f"project-skill-associations-{suffix}",
+            "observation_boundary_ref": PROJECT_SKILL_BOUNDARY_ID,
+            "confirmed_on": confirmed_on,
+            "associations": [],
+        },
+    )
 
 
 def build_in_memory_project_skill_preview(
@@ -1566,7 +1752,7 @@ def build_in_memory_project_skill_preview(
     *,
     expected_identity: tuple[int, int] | None = None,
 ) -> dict[str, Any]:
-    """Observe one picker-selected project in memory without Registry or disk writes."""
+    """Observe one picker-selected project without reading any sibling project."""
 
     boundary = load_project_skill_runtime_boundary(PROJECT_SKILL_BOUNDARY_PATH)
     validate_project_skill_runtime_boundary(boundary, required_connection="api")
@@ -1574,14 +1760,19 @@ def build_in_memory_project_skill_preview(
     identity = (selected["device"], selected["inode"])
     if expected_identity is not None and identity != expected_identity:
         raise FolderSelectionError("folder_identity_changed")
-    relative_path = selected["relative_path"]
-    project_id = "session-project:" + hashlib.sha256(relative_path.encode("utf-8")).hexdigest()[:16]
+    selected_path = selected["path"]
+    observation_root = selected_path.parent
+    root_identity = _directory_identity_without_symlinks(observation_root)
+    relative_path = selected_path.name
+    project_id = "saved-project:" + hashlib.sha256(
+        str(selected_path).encode("utf-8")
+    ).hexdigest()[:16]
     confirmed_on = datetime.now(timezone.utc).date().isoformat()
     payload = build_project_skill_snapshot(
-        root=PROJECT_SKILL_PRODUCTION_ROOT,
+        root=observation_root,
         projects_registry={
             "schema_version": 1,
-            "registry_id": "project-skill-session-projects-v1",
+            "registry_id": "project-skill-saved-projects-v1",
             "observation_boundary_ref": PROJECT_SKILL_BOUNDARY_ID,
             "confirmed_on": confirmed_on,
             "projects": [
@@ -1595,19 +1786,161 @@ def build_in_memory_project_skill_preview(
         },
         associations_registry={
             "schema_version": 1,
-            "registry_id": "project-skill-session-associations-v1",
+            "registry_id": "project-skill-saved-associations-v1",
             "observation_boundary_ref": PROJECT_SKILL_BOUNDARY_ID,
             "confirmed_on": confirmed_on,
             "associations": [],
         },
         discover_candidates=False,
+        root_config_id="saved-" + hashlib.sha256(
+            str(selected_path).encode("utf-8")
+        ).hexdigest()[:16],
+        expected_root_identity=root_identity,
     )
     selected_after = validate_selected_project_root(str(selected_path))
     if (selected_after["device"], selected_after["inode"]) != identity:
         raise FolderSelectionError("folder_identity_changed")
     if payload.get("candidates") != [] or len(payload.get("projects", [])) != 1:
-        raise ProjectSkillScanRejected("session_project_scope_mismatch")
+        raise ProjectSkillScanRejected("saved_project_scope_mismatch")
     return payload
+
+
+def _registered_project_paths(
+    root_state: Mapping[str, Any],
+    snapshot: Mapping[str, Any] | None,
+) -> dict[str, dict[str, Any]]:
+    """Index registered project directories without opening their contents."""
+
+    if not root_state.get("configured") or snapshot is None:
+        return {}
+    if snapshot.get("scan_scope", {}).get("root_config_id") != root_state.get("root_id"):
+        return {}
+    root_path = root_state.get("path")
+    if not isinstance(root_path, Path):
+        return {}
+    indexed: dict[str, dict[str, Any]] = {}
+    for project in snapshot.get("projects", []):
+        if not isinstance(project, dict) or project.get("classification") != "project":
+            continue
+        relative_path = project.get("relative_path")
+        if (
+            not isinstance(relative_path, str)
+            or not relative_path
+            or Path(relative_path).is_absolute()
+            or any(part in {"", ".", ".."} for part in Path(relative_path).parts)
+        ):
+            continue
+        indexed[str(root_path.joinpath(*Path(relative_path).parts).absolute())] = project
+    return indexed
+
+
+def _visible_saved_project_state(
+    state: Mapping[str, Any],
+    registered_paths: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Hide any local row that is already represented by the active Registry."""
+
+    return {
+        "schema_version": 1,
+        "projects": [
+            row for row in state["projects"] if row["path"] not in registered_paths
+        ],
+    }
+
+
+def save_project_skill_observation(record: Mapping[str, Any]) -> dict[str, Any]:
+    selected = validate_selected_project_root(str(record["path"]))
+    identity = (selected["device"], selected["inode"])
+    if identity != (record["device"], record["inode"]):
+        raise FolderSelectionError("folder_identity_changed")
+    root_state = load_project_skill_root_state()
+    registered_snapshot = ProjectSkillStore(
+        PROJECT_SKILL_OUTPUT_ROOT.parents[1]
+    ).load_snapshot()
+    registered_paths = _registered_project_paths(root_state, registered_snapshot)
+    saved_state = load_saved_projects(ROOT)
+    visible_state = _visible_saved_project_state(saved_state, registered_paths)
+    registered = registered_paths.get(str(selected["path"].absolute()))
+    if registered is not None:
+        if visible_state != saved_state:
+            write_saved_projects(visible_state, ROOT)
+        return {
+            "mode": "registered",
+            "project_id": registered["project_id"],
+            "saved_projects": saved_projects_api_view(visible_state),
+        }
+    snapshot = build_in_memory_project_skill_preview(
+        selected["path"],
+        expected_identity=identity,
+    )
+    if snapshot["scan_status"] != "complete":
+        raise ProjectSkillScanRejected("saved_project_scan_incomplete")
+    project_id = snapshot["projects"][0]["project_id"]
+    row = upsert_saved_project(
+        project_id=project_id,
+        path=selected["path"],
+        device=selected["device"],
+        inode=selected["inode"],
+        saved_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        snapshot=snapshot,
+        toolbox_root=ROOT,
+    )
+    stored_state = load_saved_projects(ROOT)
+    next_state = _visible_saved_project_state(stored_state, registered_paths)
+    if next_state != stored_state:
+        write_saved_projects(next_state, ROOT)
+    return {
+        "mode": "saved",
+        "project_id": project_id,
+        "saved_project": saved_projects_api_view(
+            {"schema_version": 1, "projects": [row]}
+        )[0],
+        "saved_projects": saved_projects_api_view(next_state),
+    }
+
+
+def refresh_saved_project_observations(
+    *,
+    root_state: Mapping[str, Any] | None = None,
+    registered_snapshot: Mapping[str, Any] | None = None,
+) -> None:
+    """Refresh all explicit saved projects atomically; any failure preserves the old set."""
+
+    original_state = load_saved_projects(ROOT)
+    if root_state is None:
+        root_state = load_project_skill_root_state()
+    if registered_snapshot is None:
+        registered_snapshot = ProjectSkillStore(
+            PROJECT_SKILL_OUTPUT_ROOT.parents[1]
+        ).load_snapshot()
+    state = _visible_saved_project_state(
+        original_state,
+        _registered_project_paths(root_state, registered_snapshot),
+    )
+    if not state["projects"]:
+        if state != original_state:
+            write_saved_projects(state, ROOT)
+        return
+    refreshed: list[dict[str, Any]] = []
+    for row in state["projects"]:
+        selected = validate_selected_project_root(row["path"])
+        identity = (selected["device"], selected["inode"])
+        if identity != (row["device"], row["inode"]):
+            raise FolderSelectionError("folder_identity_changed")
+        snapshot = build_in_memory_project_skill_preview(
+            selected["path"],
+            expected_identity=identity,
+        )
+        if snapshot["scan_status"] != "complete":
+            raise ProjectSkillScanRejected("saved_project_scan_incomplete")
+        if snapshot["projects"][0]["project_id"] != row["project_id"]:
+            raise SavedProjectError("saved project identity changed")
+        refreshed.append({**row, "snapshot": snapshot})
+    write_saved_projects({"schema_version": 1, "projects": refreshed}, ROOT)
+
+
+def remove_project_skill_observation(project_id: str) -> bool:
+    return remove_saved_project(project_id, ROOT)
 
 
 def native_folder_picker_status() -> dict[str, Any]:
@@ -1657,7 +1990,11 @@ def run_native_folder_picker(
 ) -> dict[str, Any]:
     """Invoke only the fixed project helper with this exact Python executable."""
 
-    if target not in {FOLDER_SELECTION_TARGET, PROJECT_SKILL_FOLDER_SELECTION_TARGET}:
+    if target not in {
+        FOLDER_SELECTION_TARGET,
+        PROJECT_SKILL_FOLDER_SELECTION_TARGET,
+        PROJECT_SKILL_ROOT_SELECTION_TARGET,
+    }:
         raise FolderSelectionError("picker_target_invalid")
 
     status = native_folder_picker_status()
@@ -2096,17 +2433,38 @@ def record_failed_attempt() -> None:
 
 
 def scan_project_skills_and_persist() -> tuple[bool, dict[str, Any]]:
-    """Run the fixed-root project Skill scan and persist only its dedicated outputs."""
+    """Run the configured-root project Skill scan and persist dedicated outputs."""
 
     boundary = load_project_skill_runtime_boundary(PROJECT_SKILL_BOUNDARY_PATH)
     validate_project_skill_runtime_boundary(boundary, required_connection="api")
-    payload = build_project_skill_snapshot()
+    root_state = load_project_skill_root_state(require_configured=True)
+    if (
+        root_state["root_id"] == "legacy-documents-root-v1"
+        and root_state["path"] == PROJECT_SKILL_PRODUCTION_ROOT.absolute()
+    ):
+        projects_registry = None
+        associations_registry = None
+    else:
+        projects_registry, associations_registry = _empty_project_skill_registries(
+            root_state["root_id"]
+        )
+    payload = build_project_skill_snapshot(
+        root=root_state["path"],
+        projects_registry=projects_registry,
+        associations_registry=associations_registry,
+        root_config_id=root_state["root_id"],
+        expected_root_identity=(root_state["device"], root_state["inode"]),
+    )
     store = ProjectSkillStore(PROJECT_SKILL_OUTPUT_ROOT.parents[1])
     complete = store.persist_scan_result(payload)
     if complete:
         persisted = store.load_snapshot()
         if persisted is None:
             raise ProjectSkillPersistenceError("project Skill snapshot missing after promotion")
+        refresh_saved_project_observations(
+            root_state=root_state,
+            registered_snapshot=persisted,
+        )
         if store.last_receipt_error is not None:
             raise ProjectSkillReceiptUnavailable(
                 "project Skill snapshot committed but attempt receipt was unavailable"
@@ -2120,8 +2478,16 @@ def load_project_skill_api_view() -> dict[str, Any] | None:
 
     boundary = load_project_skill_runtime_boundary(PROJECT_SKILL_BOUNDARY_PATH)
     validate_project_skill_runtime_boundary(boundary, required_connection="api")
+    root_state = load_project_skill_root_state()
+    root_payload = project_skill_root_payload(root_state)
     store = ProjectSkillStore(PROJECT_SKILL_OUTPUT_ROOT.parents[1])
     snapshot = store.load_snapshot()
+    saved_projects = saved_projects_api_view(
+        _visible_saved_project_state(
+            load_saved_projects(ROOT),
+            _registered_project_paths(root_state, snapshot),
+        )
+    )
     auxiliary_errors: list[str] = []
     try:
         last_attempt = store.load_last_attempt()
@@ -2130,10 +2496,29 @@ def load_project_skill_api_view() -> dict[str, Any] | None:
             raise
         last_attempt = None
         auxiliary_errors.append("last_attempt_invalid")
+    if snapshot is not None:
+        snapshot_root_id = snapshot.get("scan_scope", {}).get("root_config_id")
+        active_root_id = root_state.get("root_id")
+        if active_root_id is None or snapshot_root_id not in {None, active_root_id}:
+            snapshot = None
+            last_attempt = None
+            auxiliary_errors.append("snapshot_root_mismatch")
     if snapshot is None and last_attempt is None:
-        return None
+        return {
+            "root": root_payload,
+            "saved_projects": saved_projects,
+            "snapshot": None,
+            "last_attempt": None,
+            "report": {"available": False, "generation_id": None, "content": None},
+            "integrity": {
+                "degraded": bool(auxiliary_errors),
+                "errors": auxiliary_errors,
+            },
+        }
     if snapshot is None:
         return {
+            "root": root_payload,
+            "saved_projects": saved_projects,
             "snapshot": None,
             "last_attempt": last_attempt,
             "report": {"available": False, "generation_id": None, "content": None},
@@ -2155,6 +2540,8 @@ def load_project_skill_api_view() -> dict[str, Any] | None:
     if markdown is None and "report_invalid" not in auxiliary_errors:
         auxiliary_errors.append("report_missing")
     return {
+        "root": root_payload,
+        "saved_projects": saved_projects,
         "snapshot": snapshot,
         "last_attempt": last_attempt,
         "report": {
@@ -2371,6 +2758,8 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
             "/api/candidates/refresh",
             "/api/project-skills/refresh",
             "/api/project-skills/folder-selection/confirm",
+            "/api/project-skills/saved-projects/remove",
+            "/api/project-skills/root-selection/confirm",
             "/api/folder-picker",
             "/api/folder-selection/confirm",
             "/api/folder-source/restore",
@@ -2498,7 +2887,13 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
             snapshot_health["error"] = "snapshot_invalid"
         try:
             project_skill_view = load_project_skill_api_view()
-        except (ProjectSkillScanRejected, ProjectSkillPersistenceError, OSError):
+        except (
+            ProjectSkillScanRejected,
+            ProjectSkillPersistenceError,
+            ProjectSkillRootError,
+            SavedProjectError,
+            OSError,
+        ):
             project_skill_view = None
             errors.append("project_skill_snapshot_invalid")
         project_skill_snapshot = (
@@ -2506,6 +2901,16 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
         )
         project_skill_health = {
             "available": project_skill_snapshot is not None,
+            "root": (
+                project_skill_view.get("root")
+                if project_skill_view is not None
+                else {
+                    "configured": False,
+                    "root_id": None,
+                    "display_path": None,
+                    "configured_at": None,
+                }
+            ),
             "generated_at": (
                 project_skill_snapshot.get("generated_at") if project_skill_snapshot else None
             ),
@@ -2561,9 +2966,10 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                 "ok": True,
                 "degraded": bool(errors),
                 "errors": errors,
-                "app": "ai-toolbox-workbench",
+                "app": WORKBENCH_IDENTITY["app"],
                 "api_version": API_VERSION,
-                "release_id": RELEASE_ID,
+                "build_id": WORKBENCH_IDENTITY["build_id"],
+                "source_id": WORKBENCH_IDENTITY["source_id"],
                 "mode": "observe-only",
                 "refresh_state": (
                     "running" if self.server.refresh_lock.locked() else "idle"
@@ -2644,7 +3050,14 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                     {"error": "project_skill_contract_unavailable"},
                 )
                 return
-            except (OSError, UnicodeDecodeError, json.JSONDecodeError, ProjectSkillPersistenceError):
+            except (
+                OSError,
+                UnicodeDecodeError,
+                json.JSONDecodeError,
+                ProjectSkillPersistenceError,
+                ProjectSkillRootError,
+                SavedProjectError,
+            ):
                 self._storage_error("project_skill_snapshot")
                 return
             except Exception:
@@ -2750,16 +3163,25 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
             valid_body = body in (
                 {"target": FOLDER_SELECTION_TARGET},
                 {"target": PROJECT_SKILL_FOLDER_SELECTION_TARGET},
+                {"target": PROJECT_SKILL_ROOT_SELECTION_TARGET},
             )
         elif path in {
             "/api/folder-selection/confirm",
             "/api/project-skills/folder-selection/confirm",
+            "/api/project-skills/root-selection/confirm",
         }:
             valid_body = (
                 isinstance(body, dict)
                 and set(body) == {"selection_token"}
                 and isinstance(body.get("selection_token"), str)
                 and 1 <= len(body["selection_token"]) <= 256
+            )
+        elif path == "/api/project-skills/saved-projects/remove":
+            valid_body = (
+                isinstance(body, dict)
+                and set(body) == {"project_id"}
+                and isinstance(body.get("project_id"), str)
+                and re.fullmatch(r"saved-project:[a-f0-9]{16}", body["project_id"]) is not None
             )
         else:
             valid_body = body == {}
@@ -2769,10 +3191,16 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
         project_skill_operation = path in {
             "/api/project-skills/refresh",
             "/api/project-skills/folder-selection/confirm",
+            "/api/project-skills/saved-projects/remove",
+            "/api/project-skills/root-selection/confirm",
         }
         if (
             path == "/api/folder-picker"
-            and body.get("target") == PROJECT_SKILL_FOLDER_SELECTION_TARGET
+            and body.get("target")
+            in {
+                PROJECT_SKILL_FOLDER_SELECTION_TARGET,
+                PROJECT_SKILL_ROOT_SELECTION_TARGET,
+            }
         ):
             project_skill_operation = True
         refresh_lock = (
@@ -2798,6 +3226,22 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
             if path == "/api/project-skills/refresh":
                 try:
                     complete, payload = scan_project_skills_and_persist()
+                except ProjectSkillRootError as exc:
+                    reason = str(exc)
+                    if reason in {
+                        "project_skill_root_not_configured",
+                        "project_skill_root_changed",
+                    }:
+                        self._json(
+                            HTTPStatus.CONFLICT,
+                            {
+                                "error": reason,
+                                "message": FOLDER_SELECTION_ERROR_MESSAGES[reason],
+                            },
+                        )
+                    else:
+                        self._storage_error("project_skill_root")
+                    return
                 except ProjectSkillScanRejected:
                     self._json(
                         HTTPStatus.SERVICE_UNAVAILABLE,
@@ -2836,18 +3280,21 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                 self._json(HTTPStatus.OK, payload)
                 return
             try:
-                temporary = self.server.temporary_source()
+                temporary = (
+                    None if project_skill_operation else self.server.temporary_source()
+                )
                 if path == "/api/folder-picker":
                     target = body["target"]
                     picked = run_native_folder_picker(target)
                     if picked == {"selected": False, "cancelled": True}:
                         self._json(HTTPStatus.OK, picked)
                         return
-                    selection = (
-                        validate_selected_project_root(picked["path"])
-                        if target == PROJECT_SKILL_FOLDER_SELECTION_TARGET
-                        else validate_selected_source_root(picked["path"])
-                    )
+                    if target == PROJECT_SKILL_FOLDER_SELECTION_TARGET:
+                        selection = validate_selected_project_root(picked["path"])
+                    elif target == PROJECT_SKILL_ROOT_SELECTION_TARGET:
+                        selection = validate_selected_observation_root(picked["path"])
+                    else:
+                        selection = validate_selected_source_root(picked["path"])
                     token, expires_in = self.server.issue_folder_token(
                         selection,
                         target=target,
@@ -2862,24 +3309,42 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                         },
                     )
                     return
+                if path == "/api/project-skills/root-selection/confirm":
+                    record = self.server.consume_folder_token(
+                        body["selection_token"],
+                        expected_target=PROJECT_SKILL_ROOT_SELECTION_TARGET,
+                    )
+                    state = configure_project_skill_root(record)
+                    self._json(
+                        HTTPStatus.OK,
+                        {"root": project_skill_root_payload(state)},
+                    )
+                    return
                 if path == "/api/project-skills/folder-selection/confirm":
                     record = self.server.consume_folder_token(
                         body["selection_token"],
                         expected_target=PROJECT_SKILL_FOLDER_SELECTION_TARGET,
                     )
-                    payload = build_in_memory_project_skill_preview(
-                        record["path"],
-                        expected_identity=(record["device"], record["inode"]),
-                    )
+                    result = save_project_skill_observation(record)
+                    response = {
+                        "saved_projects": result["saved_projects"],
+                        "selection": {
+                            "mode": result["mode"],
+                            "project_id": result["project_id"],
+                        },
+                    }
+                    if "saved_project" in result:
+                        response["saved_project"] = result["saved_project"]
                     self._json(
                         HTTPStatus.OK,
-                        {
-                            "snapshot": payload,
-                            "selection": {
-                                "mode": "temporary",
-                                "display_path": record["display_path"],
-                            },
-                        },
+                        response,
+                    )
+                    return
+                if path == "/api/project-skills/saved-projects/remove":
+                    removed = remove_project_skill_observation(body["project_id"])
+                    self._json(
+                        HTTPStatus.OK,
+                        {"removed": removed, "project_id": body["project_id"]},
                     )
                     return
                 if path == "/api/folder-selection/confirm":
@@ -2979,6 +3444,22 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                     error_payload["message"] = message
                 self._json(status, error_payload)
                 return
+            except ProjectSkillRootError as exc:
+                reason = str(exc)
+                if reason in {
+                    "project_skill_root_not_configured",
+                    "project_skill_root_changed",
+                }:
+                    self._json(
+                        HTTPStatus.CONFLICT,
+                        {
+                            "error": reason,
+                            "message": FOLDER_SELECTION_ERROR_MESSAGES[reason],
+                        },
+                    )
+                else:
+                    self._storage_error("project_skill_root")
+                return
             except Exception:
                 if path == "/api/refresh":
                     try:
@@ -2995,6 +3476,8 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                         or path in {
                             "/api/folder-selection/confirm",
                             "/api/project-skills/folder-selection/confirm",
+                            "/api/project-skills/saved-projects/remove",
+                            "/api/project-skills/root-selection/confirm",
                         }
                         else HTTPStatus.INTERNAL_SERVER_ERROR
                     ),
@@ -3002,6 +3485,10 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                         "error": (
                             "selected_project_skill_scan_failed"
                             if path == "/api/project-skills/folder-selection/confirm"
+                            else "saved_project_removal_failed"
+                            if path == "/api/project-skills/saved-projects/remove"
+                            else "project_skill_root_configuration_failed"
+                            if path == "/api/project-skills/root-selection/confirm"
                             else
                             "selected_source_scan_failed"
                             if temporary is not None
@@ -3019,6 +3506,10 @@ class ToolboxHandler(SimpleHTTPRequestHandler):
                         "message": (
                             "所选项目的 Skill 只读观察未完成；登记项目快照与所选文件夹均未改变"
                             if path == "/api/project-skills/folder-selection/confirm"
+                            else "本机项目监测记录未移除；项目文件夹没有被修改"
+                            if path == "/api/project-skills/saved-projects/remove"
+                            else "项目 Skill 观察根未保存；原有设置保持不变"
+                            if path == "/api/project-skills/root-selection/confirm"
                             else
                             "本次临时来源扫描失败，当前会话数据未被覆盖"
                             if temporary is not None

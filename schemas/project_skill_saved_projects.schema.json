@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.ai-os.invalid/schemas/project-skill-saved-projects.schema.json",
+  "title": "AI-Toolbox local-only saved Project Skill observations",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "projects"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "projects": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["project_id", "path", "device", "inode", "saved_at", "snapshot"],
+        "properties": {
+          "project_id": {"type": "string", "pattern": "^saved-project:[a-f0-9]{16}$"},
+          "path": {"type": "string", "minLength": 1, "maxLength": 4096},
+          "device": {"type": "integer", "minimum": 0},
+          "inode": {"type": "integer", "minimum": 0},
+          "saved_at": {"type": "string", "format": "date-time", "maxLength": 64},
+          "snapshot": {"$ref": "project_skill_snapshot.schema.json"}
+        }
+      }
+    }
+  }
+}

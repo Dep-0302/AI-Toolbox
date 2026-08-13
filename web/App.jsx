@@ -182,7 +182,7 @@ export default function App() {
   const [projectSkillLoaded, setProjectSkillLoaded] = useState(false)
   const [projectSkillRefreshing, setProjectSkillRefreshing] = useState(false)
   const [projectSkillError, setProjectSkillError] = useState('')
-  const [temporaryProjectSkill, setTemporaryProjectSkill] = useState(null)
+  const [preferredProjectSkillId, setPreferredProjectSkillId] = useState('')
   const [folderDialog, setFolderDialog] = useState(null)
   const [sourceSwitching, setSourceSwitching] = useState(false)
   const [notice, setNotice] = useState(null)
@@ -431,6 +431,36 @@ export default function App() {
     }
   }, [health?.csrf_token, loadProjectSkills, projectSkillRefreshing, projectSkillView?.snapshot])
 
+  const removeSavedProjectSkill = useCallback(async (projectId) => {
+    if (!health?.csrf_token || projectSkillRefreshing) return false
+    setProjectSkillRefreshing(true)
+    setProjectSkillError('')
+    try {
+      await parseResponse(
+        await fetch('/api/project-skills/saved-projects/remove', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-AI-Toolbox-CSRF': health.csrf_token,
+          },
+          body: JSON.stringify({ project_id: projectId }),
+        }),
+      )
+      setProjectSkillView((current) => current ? {
+        ...current,
+        saved_projects: (current.saved_projects || []).filter((row) => row.project_id !== projectId),
+      } : current)
+      setPreferredProjectSkillId((current) => current === projectId ? '' : current)
+      setNotice({ tone: 'success', message: '已移除该本机项目监测记录；项目文件夹和其中的 Skill 均未改动。' })
+      return true
+    } catch (error) {
+      setProjectSkillError(error.payload?.message || `项目监测记录未移除：${error.message}`)
+      return false
+    } finally {
+      setProjectSkillRefreshing(false)
+    }
+  }, [health?.csrf_token, projectSkillRefreshing])
+
   const refreshCollections = useCallback(async () => {
     if (!health?.csrf_token || collectionRefreshing || collectionChecking || sourceSwitching) return
     setCollectionRefreshing(true)
@@ -465,7 +495,7 @@ export default function App() {
 
   const sourceSession = health?.source_session || {
     mode: 'default',
-    display_path: '',
+    display_path: collectionSnapshot?.source_root || '',
     source_key: 'default',
   }
   const folderPicker = health?.folder_picker || {
@@ -500,7 +530,9 @@ export default function App() {
           body: JSON.stringify({
             target: folderDialog?.context === 'project-skills'
               ? 'project-skill-source'
-              : 'collection-source',
+              : folderDialog?.context === 'project-skill-root'
+                ? 'project-skill-observation-root'
+                : 'collection-source',
           }),
         }),
       )
@@ -510,6 +542,8 @@ export default function App() {
           tone: 'info',
           message: folderDialog?.context === 'project-skills'
             ? '已取消选择，当前项目与项目 Skill 观察均未改变。'
+            : folderDialog?.context === 'project-skill-root'
+              ? '已取消选择，当前项目观察根保持不变。'
             : '已取消选择，当前收藏来源和索引均未改变。',
         })
         window.setTimeout(() => folderDialogTriggerRef.current?.focus?.(), 0)
@@ -543,9 +577,12 @@ export default function App() {
     setFolderDialog((current) => current ? { ...current, error: '' } : current)
     try {
       const projectSkillContext = folderDialog.context === 'project-skills'
+      const projectSkillRootContext = folderDialog.context === 'project-skill-root'
       const payload = await parseResponse(
         await fetch(projectSkillContext
           ? '/api/project-skills/folder-selection/confirm'
+          : projectSkillRootContext
+            ? '/api/project-skills/root-selection/confirm'
           : '/api/folder-selection/confirm', {
           method: 'POST',
           headers: {
@@ -556,7 +593,31 @@ export default function App() {
         }),
       )
       if (projectSkillContext) {
-        setTemporaryProjectSkill(payload)
+        setProjectSkillView((current) => ({
+          ...(current || {}),
+          saved_projects: payload.saved_projects || [],
+        }))
+        setPreferredProjectSkillId(payload.selection.project_id)
+      } else if (projectSkillRootContext) {
+        setPreferredProjectSkillId('')
+        setProjectSkillView({
+          root: payload.root,
+          saved_projects: projectSkillView?.saved_projects || [],
+          snapshot: null,
+          last_attempt: null,
+          report: { available: false, generation_id: null, content: null },
+          integrity: { degraded: false, errors: [] },
+        })
+        setProjectSkillLoaded(true)
+        setProjectSkillError('')
+        setHealth((current) => current ? {
+          ...current,
+          project_skill_snapshot: {
+            ...(current.project_skill_snapshot || {}),
+            root: payload.root,
+            available: false,
+          },
+        } : current)
       } else {
         collectionCheckRequestRef.current += 1
         collectionCheckInFlightRef.current = false
@@ -570,7 +631,11 @@ export default function App() {
       setNotice({
         tone: 'success',
         message: projectSkillContext
-          ? '已读取所选文件夹中的项目 Skill；仅在当前页面临时展示，未加入登记或写回项目。'
+          ? payload.selection.mode === 'registered'
+            ? '该文件夹已是登记项目；已直接切换，不会重复添加本机监测。'
+            : '已保存为本机项目监测；刷新页面或重启服务后仍保留，不写回项目。'
+          : projectSkillRootContext
+            ? '项目 Skill 观察根已保存在本机；尚未扫描，请点击“手动刷新项目观察”建立新快照。'
           : '已为本次本地服务会话切换收藏来源；“全部收藏”与“备选 Skill 库”已使用同一份只读索引。',
       })
       window.setTimeout(() => folderDialogTriggerRef.current?.focus?.(), 0)
@@ -582,7 +647,7 @@ export default function App() {
     } finally {
       setSourceSwitching(false)
     }
-  }, [folderDialog?.context, folderDialog?.selectionToken, health?.csrf_token, sourceSwitching])
+  }, [folderDialog?.context, folderDialog?.selectionToken, health?.csrf_token, projectSkillView?.saved_projects, sourceSwitching])
 
   const restoreDefaultSource = useCallback(async () => {
     if (!health?.csrf_token || sourceSwitching || sourceSession.mode === 'default') return
@@ -776,6 +841,7 @@ export default function App() {
           {activeView === 'project-skills' ? (
             <ProjectSkillsView
               snapshot={projectSkillView?.snapshot || null}
+              root={projectSkillView?.root || null}
               attempt={projectSkillView?.last_attempt || null}
               integrity={projectSkillView?.integrity || null}
               report={projectSkillView?.report || null}
@@ -784,8 +850,11 @@ export default function App() {
               error={projectSkillError}
               onRefresh={refreshProjectSkills}
               onReload={loadProjectSkills}
-              temporaryProjectSkill={temporaryProjectSkill}
+              savedProjects={projectSkillView?.saved_projects || []}
+              preferredProjectId={preferredProjectSkillId}
+              onRemoveSavedProject={removeSavedProjectSkill}
               onChooseOtherFolder={(trigger) => openFolderDialog('project-skills', trigger)}
+              onChooseRoot={(trigger) => openFolderDialog('project-skill-root', trigger)}
             />
           ) : activeView === 'collections' ? (
             <CollectionsView
@@ -1091,8 +1160,11 @@ function FolderSourceDialog({ state, picker, busy, onChoose, onConfirm, onClose 
   const closeRef = useRef(null)
   const candidateContext = state.context === 'candidates'
   const projectSkillContext = state.context === 'project-skills'
-  const title = projectSkillContext
-    ? '选择其他项目文件夹'
+  const projectSkillRootContext = state.context === 'project-skill-root'
+  const title = projectSkillRootContext
+    ? '选择项目 Skill 观察根'
+    : projectSkillContext
+      ? '选择其他项目文件夹'
     : candidateContext
       ? '为备选 Skill 库选择收藏文件夹'
       : '为全部收藏选择文件夹'
@@ -1124,8 +1196,10 @@ function FolderSourceDialog({ state, picker, busy, onChoose, onConfirm, onClose 
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [busy, onClose])
 
-  const description = projectSkillContext
-    ? '选择一个位于“文稿”观察根内的具体项目文件夹。本页只读取该项目批准的 Skill 入口，并临时展示结果。'
+  const description = projectSkillRootContext
+    ? '选择一个长期存放项目的父目录。手动刷新时，工作台只枚举该目录下一级候选；未登记候选不会读取 Skill 内容。'
+    : projectSkillContext
+      ? '选择任意一个安全的具体项目文件夹。本页只读取该项目批准的 Skill 入口，并将它保存为本机监测项目；它不必位于长期观察根内。'
     : candidateContext
       ? '此页只识别所选目录中可评估的 Skill 包，用于留／砍／并；确认后同一目录也会成为本次会话的“全部收藏”来源。'
       : '默认只读盘点当前收藏目录。只有在收藏位于其他目录，或想临时盘点另一批资料时，才需要切换。'
@@ -1157,12 +1231,14 @@ function FolderSourceDialog({ state, picker, busy, onChoose, onConfirm, onClose 
 
         {state.step === 'confirm' ? (
           <div className="folder-dialog-confirm" id="folder-dialog-description">
-            <p>系统选择器已返回以下目录。请核对后再{projectSkillContext ? '读取项目 Skill' : '建立只读索引'}：</p>
+            <p>系统选择器已返回以下目录。请核对后再{projectSkillRootContext ? '保存为观察根' : projectSkillContext ? '保存为本机项目监测' : '建立只读索引'}：</p>
             <code>{state.displayPath}</code>
             <div className="folder-dialog-safety">
               <ShieldCheck size={18} />
-              <span>{projectSkillContext
-                ? '结果只保留在当前页面内存中，不加入项目登记、不覆盖完整快照，也不写回所选文件夹。'
+              <span>{projectSkillRootContext
+                ? '只保存这一个本机路径设置，不会立即扫描，也不会把绝对路径写入 Git、项目快照或 Markdown。'
+                : projectSkillContext
+                ? '只将本机路径与已验证的只读快照保存在 AI-Toolbox 的 Git 忽略状态中；不加入发布登记，也不写回所选文件夹。'
                 : '只有“全部收藏”和“备选 Skill 库”两份索引都成功且来源一致时才会切换。默认快照不会被覆盖。'}
               </span>
             </div>
@@ -1182,7 +1258,9 @@ function FolderSourceDialog({ state, picker, busy, onChoose, onConfirm, onClose 
             <dl>
               <div>
                 <dt>会读取什么</dt>
-                <dd>{projectSkillContext
+                <dd>{projectSkillRootContext
+                  ? '选根时只校验目录身份与安全边界；后续手动刷新才枚举一级候选并读取登记项目的固定 Skill 入口。'
+                  : projectSkillContext
                   ? '固定 Skill 入口、SKILL.md 的受限 frontmatter，以及同项目内安全链接关系；不读取正文。'
                   : '文件名、目录结构、有限元数据、可识别清单，以及受大小和数量上限保护的包内清单。'}
                 </dd>
@@ -1193,14 +1271,18 @@ function FolderSourceDialog({ state, picker, busy, onChoose, onConfirm, onClose 
               </div>
               <div>
                 <dt>影响范围</dt>
-                <dd>{projectSkillContext
-                  ? '只在当前“项目 Skill”页面临时增加一个可选项目；不加入项目登记，刷新页面后回到登记项目。'
+                <dd>{projectSkillRootContext
+                  ? '只改变本机下次项目 Skill 手动刷新的观察起点；不会自动扫描、合并多个根或写回被观察项目。'
+                : projectSkillContext
+                  ? '在当前“项目 Skill”页面增加一个本机可选项目；页面刷新和服务重启后仍保留，可随时用“移除监测”删除本机记录。'
                   : '只影响当前本地服务会话中的两个页面；重启服务或点击“恢复默认”后回到默认来源。'}
                 </dd>
               </div>
             </dl>
-            <p className="folder-dialog-caution">{projectSkillContext
-              ? '请选择具体项目文件夹；整个个人目录、桌面、文稿根目录、系统目录和敏感目录都会被拒绝。'
+            <p className="folder-dialog-caution">{projectSkillRootContext
+              ? '可以选择 Documents、Desktop 或其他专用项目父目录；不能选整个个人目录、系统目录、敏感目录或 AI-Toolbox 自身。'
+              : projectSkillContext
+                ? '请选择具体项目文件夹；整个个人目录、桌面或文稿根目录、系统目录和敏感目录会被拒绝。'
               : '请选择尽可能小、专门存放收藏或备选 Skill 的目录；不要选择整个个人目录、桌面、文稿或系统目录。'}
             </p>
             {!picker.available && (
@@ -1216,8 +1298,8 @@ function FolderSourceDialog({ state, picker, busy, onChoose, onConfirm, onClose 
             <button className="refresh-button" onClick={onConfirm} disabled={busy || !state.selectionToken}>
               <ShieldCheck size={17} />
               {busy
-                ? projectSkillContext ? '正在读取项目 Skill…' : '正在建立两份索引…'
-                : projectSkillContext ? '确认并读取项目 Skill' : '确认并建立只读索引'}
+                ? projectSkillRootContext ? '正在保存观察根…' : projectSkillContext ? '正在保存项目监测…' : '正在建立两份索引…'
+                : projectSkillRootContext ? '确认并保存观察根' : projectSkillContext ? '确认并保存项目监测' : '确认并建立只读索引'}
             </button>
           ) : (
             <button className="refresh-button" onClick={onChoose} disabled={busy || !picker.available}>
@@ -1225,7 +1307,7 @@ function FolderSourceDialog({ state, picker, busy, onChoose, onConfirm, onClose 
               {busy
                 ? '等待系统窗口选择…'
                 : state.error
-                  ? projectSkillContext ? '重新选择项目文件夹' : '重新选择文件夹'
+                  ? projectSkillRootContext ? '重新选择观察根' : projectSkillContext ? '重新选择项目文件夹' : '重新选择文件夹'
                   : '了解并选择'}
             </button>
           )}
@@ -2180,7 +2262,6 @@ function CollectionsView({
   const candidateSourceMismatch = Boolean(
     snapshot && candidateCatalog && candidateCatalog.source_dir !== snapshot.source_root,
   )
-  const sourceDisplayPath = sourceSession?.display_path || '来源路径未提供'
   const scenarios = useMemo(
     () => [...new Set(
       entries
@@ -2310,7 +2391,7 @@ function CollectionsView({
       <div className="collection-source-line">
         <ShieldCheck size={17} />
         <span>只读来源 · {sourceSession?.mode === 'temporary' ? '临时自选' : '默认目录'}</span>
-        <code>{sourceDisplayPath}</code>
+        <code>{snapshot.source_root}</code>
         <small>启动时已检查 · {formatTimestamp(snapshot.generated_at)}</small>
         {sourceSession?.mode === 'temporary' && (
           <button className="source-restore-button" onClick={onRestoreSource} disabled={sourceBusy}>
@@ -2381,14 +2462,14 @@ function CollectionsView({
         context="attempt"
         errors={scanAttempt?.scan_errors}
         entries={entries}
-        sourceRoot={sourceDisplayPath}
+        sourceRoot={snapshot.source_root}
         onSelectEntry={onSelectEntry}
       />
 
       <CollectionScanNotice
         errors={snapshot.scan_errors}
         entries={entries}
-        sourceRoot={sourceDisplayPath}
+        sourceRoot={snapshot.source_root}
         onSelectEntry={onSelectEntry}
       />
 
@@ -3054,7 +3135,6 @@ function CandidatesView({
   const items = useMemo(() => candidateDisplayItems(catalog), [catalog])
   const candidateSourceDir = typeof catalog?.source_dir === 'string' ? catalog.source_dir : ''
   const currentCollectionSource = typeof collectionSourceRoot === 'string' ? collectionSourceRoot : ''
-  const sourceDisplayPath = sourceSession?.display_path || '来源路径未提供'
   const sourceMismatch = Boolean(
     catalog && currentCollectionSource && candidateSourceDir !== currentCollectionSource,
   )
@@ -3462,7 +3542,7 @@ function CandidatesView({
       <div className="candidate-source-line">
         <ShieldCheck size={17} />
         <span>只读来源 · {sourceSession?.mode === 'temporary' ? '临时自选' : '默认目录'}</span>
-        <code>{sourceDisplayPath}</code>
+        <code>{candidateSourceDir || '来源路径未提供'}</code>
         {sourceSession?.mode === 'temporary' && (
           <button className="source-restore-button" onClick={onRestoreSource} disabled={sourceBusy}>恢复默认</button>
         )}
@@ -4161,7 +4241,7 @@ function AssetCard({ item, favorite, findingCount, onSelect, onFavorite, showSub
             const observed = bindings.some((binding) => binding.host_id === hostId)
             return (
               <span key={hostId} className={observed ? 'observed' : ''} title={`${HOST_LABELS[hostId]}：${observed ? '已启用' : '未启用'}`}>
-                <span className="host-initial" aria-hidden="true">{HOST_LABELS[hostId].slice(0, 1)}</span>
+                <img src={`/hosts/${hostId}.png`} alt={HOST_LABELS[hostId]} />
               </span>
             )
           })}
@@ -4175,10 +4255,9 @@ function AssetCard({ item, favorite, findingCount, onSelect, onFavorite, showSub
 }
 
 function HostMark({ hostId }) {
-  const label = HOST_LABELS[hostId] || hostId
   return (
-    <span className={`host-mark host-${hostId}`} title={label} aria-label={label}>
-      <span className="host-initial" aria-hidden="true">{label.slice(0, 1).toUpperCase()}</span>
+    <span className={`host-mark host-${hostId}`} title={HOST_LABELS[hostId] || hostId}>
+      <img src={`/hosts/${hostId}.png`} alt={HOST_LABELS[hostId] || hostId} />
     </span>
   )
 }

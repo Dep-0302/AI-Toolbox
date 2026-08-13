@@ -18,6 +18,8 @@ ASSOCIATIONS_PATH = REGISTRY_DIR / "project_skill_associations.json"
 PROJECTS_SCHEMA_PATH = SCHEMA_DIR / "project_skill_projects.schema.json"
 ASSOCIATIONS_SCHEMA_PATH = SCHEMA_DIR / "project_skill_associations.schema.json"
 SNAPSHOT_SCHEMA_PATH = SCHEMA_DIR / "project_skill_snapshot.schema.json"
+ROOT_SCHEMA_PATH = SCHEMA_DIR / "project_skill_root.schema.json"
+SAVED_PROJECTS_SCHEMA_PATH = SCHEMA_DIR / "project_skill_saved_projects.schema.json"
 CHINESE_METADATA_PATH = REGISTRY_DIR / "chinese_metadata.json"
 CHINESE_METADATA_SCHEMA_PATH = SCHEMA_DIR / "chinese_metadata.schema.json"
 TOOL_ASSET_SCHEMA_PATH = SCHEMA_DIR / "tool_asset.schema.json"
@@ -149,6 +151,7 @@ class ProjectSkillContractTests(unittest.TestCase):
         cls.projects_schema = load_json(PROJECTS_SCHEMA_PATH)
         cls.associations_schema = load_json(ASSOCIATIONS_SCHEMA_PATH)
         cls.snapshot_schema = load_json(SNAPSHOT_SCHEMA_PATH)
+        cls.saved_projects_schema = load_json(SAVED_PROJECTS_SCHEMA_PATH)
         cls.chinese_metadata = load_json(CHINESE_METADATA_PATH)
         cls.chinese_metadata_schema = load_json(CHINESE_METADATA_SCHEMA_PATH)
         cls.tool_asset_schema = load_json(TOOL_ASSET_SCHEMA_PATH)
@@ -167,6 +170,8 @@ class ProjectSkillContractTests(unittest.TestCase):
             PROJECTS_SCHEMA_PATH,
             ASSOCIATIONS_SCHEMA_PATH,
             SNAPSHOT_SCHEMA_PATH,
+            ROOT_SCHEMA_PATH,
+            SAVED_PROJECTS_SCHEMA_PATH,
             CHINESE_METADATA_PATH,
             CHINESE_METADATA_SCHEMA_PATH,
             *sorted(FIXTURE_ROOT.rglob("*.json")),
@@ -175,6 +180,16 @@ class ProjectSkillContractTests(unittest.TestCase):
         for path in paths:
             with self.subTest(path=path.relative_to(ROOT)):
                 self.assertIsInstance(json.loads(path.read_text(encoding="utf-8")), dict)
+
+    def test_saved_projects_schema_is_local_strict_and_reuses_snapshot_contract(self) -> None:
+        schema = self.saved_projects_schema
+        self.assertFalse(schema["additionalProperties"])
+        self.assertEqual(set(schema["required"]), {"schema_version", "projects"})
+        project = schema["properties"]["projects"]["items"]
+        self.assertFalse(project["additionalProperties"])
+        self.assertEqual(project["properties"]["snapshot"]["$ref"], "project_skill_snapshot.schema.json")
+        self.assertEqual(project["properties"]["path"]["maxLength"], 4096)
+        self.assertEqual(schema["properties"]["projects"]["maxItems"], 64)
 
     def test_registry_root_and_record_fields_match_strict_schemas(self) -> None:
         pairs = [

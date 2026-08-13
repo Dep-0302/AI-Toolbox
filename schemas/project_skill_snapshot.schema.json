@@ -69,7 +69,7 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 4000,
-      "pattern": "^(?![\\s\\S]*(?:/[U]sers/|file://|https?://|-----BEGIN|<script|api[_ -]?key|authorization|bearer[ \\t]))[\\s\\S]+$"
+      "pattern": "^(?![\\s\\S]*(?:/Users/|file://|https?://|-----BEGIN|<script|api[_ -]?key|authorization|bearer[ \\t]))[\\s\\S]+$"
     },
     "nullable_safe_text": {
       "oneOf": [
@@ -95,6 +95,7 @@
         "trigger": {"const": "manual"},
         "execution": {"const": "foreground"},
         "network": {"const": "disabled"},
+        "root_config_id": {"$ref": "#/$defs/stable_id"},
         "limits": {
           "type": "object",
           "additionalProperties": false,

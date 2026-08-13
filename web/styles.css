@@ -501,9 +501,19 @@ button:disabled {
 .project-folder-selection-icon { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; color: var(--blue); background: var(--blue-soft); border-radius: 9px; }
 .project-folder-selection label { flex: 0 0 min(390px, 42%); }
 .project-folder-selection select { width: 100%; min-height: 42px; padding: 0 34px 0 12px; color: var(--ink); font: inherit; background: #fff; border: 1px solid var(--line-strong); border-radius: 8px; }
+.project-skill-root-setting { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 14px 16px; color: #5c471b; background: #fffaf0; border: 1px solid #ead7ac; border-radius: var(--radius); }
+.project-skill-root-setting.is-configured { color: var(--ink); background: #f7f9ff; border-color: #d7def1; }
+.project-skill-root-setting > div { display: grid; min-width: 0; gap: 3px; }
+.project-skill-root-setting strong { font-size: 13px; }
+.project-skill-root-setting code { overflow: hidden; color: #3f4d65; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.project-skill-root-setting small { color: var(--muted); font-size: 10px; line-height: 1.5; }
+.project-skill-root-setting button { white-space: nowrap; }
 .project-selected-library { min-width: 0; }
 .project-selected-intro { align-items: end; padding: 4px 2px 0; }
-.project-selected-intro code { max-width: 45%; overflow-wrap: anywhere; color: var(--muted); font-size: 10px; text-align: right; }
+.project-skill-remove-monitor { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 11px; color: #a33d36; font: inherit; font-size: 12px; font-weight: 700; white-space: nowrap; background: #fff7f6; border: 1px solid #edc5c1; border-radius: 8px; cursor: pointer; }
+.project-skill-remove-monitor:hover { background: #fff0ee; border-color: #dcaaa5; }
+.project-skill-remove-monitor:focus-visible { outline: 2px solid #c96a61; outline-offset: 2px; }
+.project-skill-remove-monitor:disabled { cursor: wait; opacity: 0.6; }
 .project-scenario-collection { padding-top: 12px; }
 .project-scenario-section .scenario-grid { padding-bottom: 2px; }
 .project-skill-library-card .asset-card-footer { gap: 8px; }
@@ -3260,23 +3270,17 @@ button:disabled {
   align-items: center;
 }
 
-.host-dots .host-initial {
-  display: grid;
+.host-dots > span img {
   width: 16px;
   height: 16px;
-  place-items: center;
-  color: #475467;
-  font-size: 9px;
-  font-weight: 800;
-  line-height: 1;
-  background: #e4e7ec;
   border-radius: 4px;
+  filter: grayscale(1);
   opacity: 0.35;
+  display: block;
 }
 
-.host-dots > span.observed .host-initial {
-  color: white;
-  background: #344054;
+.host-dots > span.observed img {
+  filter: none;
   opacity: 1;
 }
 
@@ -3340,17 +3344,13 @@ button:disabled {
   place-items: center;
   border-radius: 8px;
   overflow: hidden;
-  color: white;
-  font-size: 14px;
-  font-weight: 800;
-  line-height: 1;
 }
 
-.host-mark .host-initial {
-  display: grid;
+.host-mark img {
   width: 100%;
   height: 100%;
-  place-items: center;
+  object-fit: cover;
+  display: block;
 }
 
 .host-claude {
@@ -4589,15 +4589,16 @@ dd {
 @media (max-width: 680px) {
   .project-skills-intro { align-items: stretch; flex-direction: column; }
   .project-skills-refresh { width: 100%; }
-  .project-skills-first-refresh { width: max-content; max-width: 100%; padding: 0 14px; white-space: nowrap; }
   .project-skills-status-line { gap: 6px 10px; }
   .project-skills-status-meta { gap: 4px 10px; }
   .project-skills-contract-ref { max-width: 140px; }
   .project-skills-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .project-folder-selection { align-items: stretch; flex-direction: column; }
   .project-folder-selection label { flex-basis: auto; width: 100%; }
+  .project-skill-root-setting { grid-template-columns: auto minmax(0, 1fr); }
+  .project-skill-root-setting button { grid-column: 1 / -1; justify-content: center; }
   .project-selected-intro { align-items: flex-start; flex-direction: column; }
-  .project-selected-intro code { max-width: 100%; text-align: left; }
+  .project-skill-remove-monitor { width: 100%; justify-content: center; }
   .project-skill-card-evidence { justify-content: flex-start; width: 100%; margin-left: 0; }
   .project-skill-library-card .asset-card-footer { align-items: flex-start; flex-direction: column; }
   .project-skills-filter-bar { align-items: stretch; }
