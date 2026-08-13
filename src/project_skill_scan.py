@@ -29,21 +29,25 @@ from datetime import date, datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Any, Callable, Iterable, Mapping
 
+try:
+    from project_skill_root import load_project_skill_root_config
+except ImportError:  # pragma: no cover - package execution only.
+    from .project_skill_root import load_project_skill_root_config
+
 
 SCHEMA_VERSION = 1
 BOUNDARY_ID = "project-skill-observation-boundary-v1"
 PROJECTION_VERSION = "projection_sha256_v1"
 PRODUCTION_ROOT = Path.home() / "Documents"
-PRODUCTION_ROOT_DECLARATION = "~/Documents"
 TOOLBOX_ROOT = Path(__file__).resolve().parents[1]
 BOUNDARY_PATH = TOOLBOX_ROOT / "registry" / "project_skill_observation_boundary.json"
 PROJECTS_PATH = TOOLBOX_ROOT / "registry" / "project_skill_projects.json"
 ASSOCIATIONS_PATH = TOOLBOX_ROOT / "registry" / "project_skill_associations.json"
 CHINESE_METADATA_PATH = TOOLBOX_ROOT / "registry" / "chinese_metadata.json"
 BOUNDARY_DIGESTS = {
-    "non_persistent_preview": "3a19faf941ed273409ce4162d0509b4a90455b959f78e1ea700cf6d0fef652bf",
-    "persistent_readonly_api": "f4d83b0d7d067a420b40411dfa83bce10f8c5cc5747912d9994c5d6bc9945fc9",
-    "readonly_workbench": "a4e689fe9ade14eddce6f2c4bf7b1e9b26b7fb227f0da3077f036e8b421d9efe",
+    "non_persistent_preview": "7460073193db05868ad28738d3fb77b4b78e09799411bf8f7bf0d9029176aac7",
+    "persistent_readonly_api": "501aa554298e0591c565c795cf9e226eef74917cc1c669904db36f0af6c8d3b7",
+    "readonly_workbench": "52f74aecbd8c6c8f2084bebe35a5708405f2eb46ace14ce5b51d5469a37f1f4c",
 }
 
 LIMITS: dict[str, int | float] = {
@@ -2476,13 +2480,19 @@ def validate_project_skill_payload(payload: Any) -> None:
         raise PayloadValidationError("invalid generated time")
     if row["scan_status"] not in {"complete", "partial", "error", "security_reject"}:
         raise PayloadValidationError("invalid scan status")
-    scope = _object_shape(row["scan_scope"], {"trigger", "execution", "network", "limits"})
+    scope = _object_shape(
+        row["scan_scope"],
+        {"trigger", "execution", "network", "limits"},
+        {"root_config_id"},
+    )
     if (scope["trigger"], scope["execution"], scope["network"]) != (
         "manual",
         "foreground",
         "disabled",
     ) or scope["limits"] != LIMITS:
         raise PayloadValidationError("invalid scan scope")
+    if "root_config_id" in scope:
+        _payload_stable_id(scope["root_config_id"])
     candidates = row["candidates"]
     projects = row["projects"]
     issues = row["issues"]
@@ -2791,10 +2801,12 @@ def build_project_skill_snapshot(
     chinese_metadata_registry: Mapping[str, Any] | None = None,
     *,
     discover_candidates: bool = True,
+    root_config_id: str | None = "legacy-documents-root-v1",
+    expected_root_identity: tuple[int, int] | None = None,
     generated_at: datetime | str | Callable[[], datetime | str] | None = None,
     monotonic: Callable[[], float] = time.monotonic,
 ) -> dict[str, Any]:
-    """Build one in-memory preview; an explicit root is intended for tests only."""
+    """Build one in-memory preview from one already-approved observation root."""
 
     _require_descriptor_safety()
     observed_at = _iso_time(generated_at)
@@ -2826,6 +2838,16 @@ def build_project_skill_snapshot(
     if root_fd >= 0:
         try:
             root_stamp = StatStamp.from_stat(os.fstat(root_fd))
+            if expected_root_identity is not None and (
+                root_stamp.device,
+                root_stamp.inode,
+            ) != expected_root_identity:
+                raise ScanRejected("observation_root_changed")
+        except ScanRejected as exc:
+            os.close(root_fd)
+            _issue(issues, status=exc.status, code=exc.code)
+            root_failure_status = exc.status
+            root_fd = -1
         except OSError:
             os.close(root_fd)
             _issue(issues, status="error", code="observation_root_unavailable")
@@ -2917,6 +2939,10 @@ def build_project_skill_snapshot(
             key=lambda row: (row["status"], row["code"], row.get("project_id", ""), row.get("relative_path", "")),
         ),
     }
+    if root_config_id is not None:
+        if not isinstance(root_config_id, str) or not _STABLE_ID.fullmatch(root_config_id):
+            raise PayloadValidationError("invalid root config id")
+        payload["scan_scope"]["root_config_id"] = root_config_id
     if scan_status == "complete":
         payload["changes"] = {
             "status": "not_available",
@@ -2974,6 +3000,8 @@ def validate_project_skill_runtime_boundary(
             "generated/project-skills/snapshot.json",
             "generated/project-skills/last-attempt.json",
             "generated/project-skills/项目Skill总览.md",
+            "generated/project-skills/local-root.json",
+            "generated/project-skills/local-projects.json",
         ]
     else:
         raise ScanRejected("boundary_contract_mismatch")
@@ -2999,6 +3027,8 @@ def validate_project_skill_runtime_boundary(
             "schemas/project_skill_projects.schema.json",
             "schemas/project_skill_associations.schema.json",
             "schemas/project_skill_snapshot.schema.json",
+            "schemas/project_skill_root.schema.json",
+            "schemas/project_skill_saved_projects.schema.json",
             "schemas/chinese_metadata.schema.json",
         ],
         "fixture_root": "tests/fixtures/project-skills",
@@ -3012,6 +3042,8 @@ def validate_project_skill_runtime_boundary(
             "generated/project-skills/snapshot.json",
             "generated/project-skills/last-attempt.json",
             "generated/project-skills/项目Skill总览.md",
+            "generated/project-skills/local-root.json",
+            "generated/project-skills/local-projects.json",
         ],
         "atomic_writes": True,
         "file_mode": "0600",
@@ -3023,18 +3055,29 @@ def validate_project_skill_runtime_boundary(
         or boundary.get("contract_id") != BOUNDARY_ID
         or boundary.get("data_contract") != expected_data_contract
         or boundary.get("source_scope") != {
-            "root": PRODUCTION_ROOT_DECLARATION,
+            "root_mode": "single_local_config",
+            "local_config": "generated/project-skills/local-root.json",
+            "configured_root_selection": {
+                "enabled": True,
+                "selection": "native_picker_token_only",
+                "persistence": "local_only_0600",
+                "public_default": "not_configured",
+            },
             "candidate_discovery": "top_level_directories_only",
             "nested_projects": "explicit_registry_only",
             "new_candidate_status": "unclassified",
             "unclassified_policy": "list_only_no_skill_scan",
-            "session_selected_project": {
+            "saved_selected_project": {
                 "enabled": True,
                 "selection": "native_picker_token_only",
-                "must_be_within_root": True,
+                "must_be_within_root": False,
+                "exact_project_only": True,
                 "classification": "project",
                 "candidate_discovery": False,
-                "persistence": False,
+                "persistence": "local_only_0600",
+                "local_state": "generated/project-skills/local-projects.json",
+                "remove_by": "stable_project_id_only",
+                "remove_observed_project": False,
                 "human_associations": False,
             },
         }
@@ -3088,7 +3131,7 @@ def _print_json(payload: Mapping[str, Any]) -> None:
 
 
 def _main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Preview fixed-root project Skill observations")
+    parser = argparse.ArgumentParser(description="Preview configured-root project Skill observations")
     parser.add_argument("--preview", action="store_true", help="print the safe in-memory JSON preview")
     arguments = parser.parse_args(argv)
     if not arguments.preview:
@@ -3096,7 +3139,14 @@ def _main(argv: list[str] | None = None) -> int:
     try:
         boundary = load_project_skill_runtime_boundary()
         _validate_preview_boundary(boundary)
-        payload = build_project_skill_snapshot()
+        root_config = load_project_skill_root_config(TOOLBOX_ROOT)
+        if root_config is None:
+            raise ScanRejected("observation_root_not_configured")
+        payload = build_project_skill_snapshot(
+            root=root_config["path"],
+            root_config_id=root_config["root_id"],
+            expected_root_identity=(root_config["device"], root_config["inode"]),
+        )
         validate_project_skill_payload(payload)
     except ScanRejected as exc:
         print(f"project Skill preview rejected: {exc.code}", file=sys.stderr)

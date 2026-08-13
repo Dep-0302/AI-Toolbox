@@ -14,7 +14,7 @@ class ProjectSkillObservationBoundaryTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.boundary = json.loads(BOUNDARY_PATH.read_text(encoding="utf-8"))
 
-    def test_readonly_workbench_phase_has_only_three_current_writes(self) -> None:
+    def test_readonly_workbench_phase_has_only_five_current_writes(self) -> None:
         self.assertEqual(self.boundary["schema_version"], 1)
         self.assertEqual(self.boundary["phase"], "readonly_workbench")
         self.assertEqual(
@@ -23,6 +23,8 @@ class ProjectSkillObservationBoundaryTests(unittest.TestCase):
                 "generated/project-skills/snapshot.json",
                 "generated/project-skills/last-attempt.json",
                 "generated/project-skills/项目Skill总览.md",
+                "generated/project-skills/local-root.json",
+                "generated/project-skills/local-projects.json",
             ],
         )
 
@@ -41,6 +43,8 @@ class ProjectSkillObservationBoundaryTests(unittest.TestCase):
                 "schemas/project_skill_projects.schema.json",
                 "schemas/project_skill_associations.schema.json",
                 "schemas/project_skill_snapshot.schema.json",
+                "schemas/project_skill_root.schema.json",
+                "schemas/project_skill_saved_projects.schema.json",
                 "schemas/chinese_metadata.schema.json",
             ],
         )
@@ -88,24 +92,40 @@ class ProjectSkillObservationBoundaryTests(unittest.TestCase):
         self.assertIn("ProjectSkillsView", web_source)
         self.assertIn("/api/project-skills", web_source)
 
-    def test_documents_scope_requires_human_project_classification(self) -> None:
+    def test_configured_root_scope_requires_human_project_classification(self) -> None:
         scope = self.boundary["source_scope"]
         registry = self.boundary["project_registry"]
 
-        self.assertEqual(scope["root"], "~/Documents")
+        self.assertEqual(scope["root_mode"], "single_local_config")
+        self.assertEqual(
+            scope["local_config"], "generated/project-skills/local-root.json"
+        )
+        self.assertEqual(
+            scope["configured_root_selection"],
+            {
+                "enabled": True,
+                "selection": "native_picker_token_only",
+                "persistence": "local_only_0600",
+                "public_default": "not_configured",
+            },
+        )
         self.assertEqual(scope["candidate_discovery"], "top_level_directories_only")
         self.assertEqual(scope["nested_projects"], "explicit_registry_only")
         self.assertEqual(scope["new_candidate_status"], "unclassified")
         self.assertEqual(scope["unclassified_policy"], "list_only_no_skill_scan")
         self.assertEqual(
-            scope["session_selected_project"],
+            scope["saved_selected_project"],
             {
                 "enabled": True,
                 "selection": "native_picker_token_only",
-                "must_be_within_root": True,
+                "must_be_within_root": False,
+                "exact_project_only": True,
                 "classification": "project",
                 "candidate_discovery": False,
-                "persistence": False,
+                "persistence": "local_only_0600",
+                "local_state": "generated/project-skills/local-projects.json",
+                "remove_by": "stable_project_id_only",
+                "remove_observed_project": False,
                 "human_associations": False,
             },
         )
@@ -233,7 +253,13 @@ class ProjectSkillObservationBoundaryTests(unittest.TestCase):
             self.boundary["contract_id"],
             "project-skill-observation-boundary-v1",
         )
-        self.assertEqual(self.boundary["source_scope"]["root"], "~/Documents")
+        self.assertEqual(
+            self.boundary["source_scope"]["root_mode"], "single_local_config"
+        )
+        self.assertEqual(
+            self.boundary["source_scope"]["configured_root_selection"]["public_default"],
+            "not_configured",
+        )
         self.assertNotIn("/" + "Users/", serialized)
         self.assertFalse(
             self.boundary["metadata_projection"]["store_absolute_project_paths"]

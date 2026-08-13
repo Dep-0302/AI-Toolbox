@@ -62,7 +62,7 @@ class NativeFolderPickerTests(unittest.TestCase):
         self.assertIn("app.activate()", picker.MACOS_PICKER_SCRIPT)
         self.assertIn("app.chooseFolder", picker.MACOS_PICKER_SCRIPT)
 
-    def test_project_picker_uses_project_prompt_and_documents_start_location(self) -> None:
+    def test_project_picker_uses_exact_project_prompt_without_fixed_start_location(self) -> None:
         completed = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -78,8 +78,27 @@ class NativeFolderPickerTests(unittest.TestCase):
         self.assertTrue(payload["selected"])
         script = self.run_call.args[0][-1]
         self.assertEqual(script, picker.MACOS_PROJECT_SKILL_PICKER_SCRIPT)
-        self.assertIn("documents folder", script)
+        self.assertNotIn("documents folder", script)
         self.assertIn("项目文件夹", script)
+
+    def test_project_root_picker_has_distinct_long_term_root_prompt(self) -> None:
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=json.dumps(
+                {"selected": True, "cancelled": False, "path": "/Users/example/Projects"}
+            ),
+            stderr="",
+        )
+
+        result, payload = self.run_macos(completed, target=picker.PROJECT_SKILL_ROOT_TARGET)
+
+        self.assertEqual(result, 0)
+        self.assertTrue(payload["selected"])
+        self.assertEqual(
+            self.run_call.args[0][-1], picker.MACOS_PROJECT_SKILL_ROOT_PICKER_SCRIPT
+        )
+        self.assertIn("长期观察根", picker.MACOS_PROJECT_SKILL_ROOT_PICKER_SCRIPT)
 
     def test_macos_picker_maps_user_cancel_to_exact_cancel_payload(self) -> None:
         completed = subprocess.CompletedProcess(

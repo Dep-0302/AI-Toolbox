@@ -21,7 +21,10 @@ CANCELLED = {"selected": False, "cancelled": True}
 FAILED = {"selected": False, "cancelled": False}
 COLLECTION_TARGET = "collection-source"
 PROJECT_SKILL_TARGET = "project-skill-source"
-ALLOWED_TARGETS = frozenset({COLLECTION_TARGET, PROJECT_SKILL_TARGET})
+PROJECT_SKILL_ROOT_TARGET = "project-skill-observation-root"
+ALLOWED_TARGETS = frozenset(
+    {COLLECTION_TARGET, PROJECT_SKILL_TARGET, PROJECT_SKILL_ROOT_TARGET}
+)
 MACOS_PICKER_SCRIPT = r"""
 (() => {
   const app = Application.currentApplication();
@@ -52,8 +55,30 @@ MACOS_PROJECT_SKILL_PICKER_SCRIPT = r"""
   app.activate();
   try {
     const folder = app.chooseFolder({
-      withPrompt: "选择 Documents 观察根内的具体项目文件夹",
-      defaultLocation: app.pathTo("documents folder"),
+      withPrompt: "选择要临时只读观察的具体项目文件夹",
+      multipleSelectionsAllowed: false,
+    });
+    return JSON.stringify({
+      selected: true,
+      cancelled: false,
+      path: folder.toString(),
+    });
+  } catch (error) {
+    if (Number(error.errorNumber) === -128) {
+      return JSON.stringify({selected: false, cancelled: true});
+    }
+    throw error;
+  }
+})()
+""".strip()
+MACOS_PROJECT_SKILL_ROOT_PICKER_SCRIPT = r"""
+(() => {
+  const app = Application.currentApplication();
+  app.includeStandardAdditions = true;
+  app.activate();
+  try {
+    const folder = app.chooseFolder({
+      withPrompt: "选择项目 Skill 的长期观察根",
       multipleSelectionsAllowed: false,
     });
     return JSON.stringify({
@@ -101,11 +126,10 @@ def _validated_payload(raw: str) -> dict[str, object] | None:
 def _run_macos_picker(target: str = COLLECTION_TARGET) -> int:
     """Use macOS Standard Additions instead of the obsolete system Tk 8.5."""
 
-    script = (
-        MACOS_PROJECT_SKILL_PICKER_SCRIPT
-        if target == PROJECT_SKILL_TARGET
-        else MACOS_PICKER_SCRIPT
-    )
+    script = {
+        PROJECT_SKILL_TARGET: MACOS_PROJECT_SKILL_PICKER_SCRIPT,
+        PROJECT_SKILL_ROOT_TARGET: MACOS_PROJECT_SKILL_ROOT_PICKER_SCRIPT,
+    }.get(target, MACOS_PICKER_SCRIPT)
 
     try:
         completed = subprocess.run(
@@ -159,14 +183,11 @@ def _run_tk_picker(target: str = COLLECTION_TARGET) -> int:
             parent=root,
             mustexist=True,
             title=(
-                "选择 Documents 观察根内的具体项目文件夹"
+                "选择项目 Skill 的长期观察根"
+                if target == PROJECT_SKILL_ROOT_TARGET
+                else "选择要临时只读观察的具体项目文件夹"
                 if target == PROJECT_SKILL_TARGET
                 else "选择 AI-Toolbox 本次会话要读取的收藏文件夹"
-            ),
-            **(
-                {"initialdir": str(Path.home() / "Documents")}
-                if target == PROJECT_SKILL_TARGET
-                else {}
             ),
         )
     except Exception:

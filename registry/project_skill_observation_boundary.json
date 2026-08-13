@@ -12,6 +12,8 @@
       "schemas/project_skill_projects.schema.json",
       "schemas/project_skill_associations.schema.json",
       "schemas/project_skill_snapshot.schema.json",
+      "schemas/project_skill_root.schema.json",
+      "schemas/project_skill_saved_projects.schema.json",
       "schemas/chinese_metadata.schema.json"
     ],
     "fixture_root": "tests/fixtures/project-skills",
@@ -25,18 +27,29 @@
     }
   },
   "source_scope": {
-    "root": "~/Documents",
+    "root_mode": "single_local_config",
+    "local_config": "generated/project-skills/local-root.json",
+    "configured_root_selection": {
+      "enabled": true,
+      "selection": "native_picker_token_only",
+      "persistence": "local_only_0600",
+      "public_default": "not_configured"
+    },
     "candidate_discovery": "top_level_directories_only",
     "nested_projects": "explicit_registry_only",
     "new_candidate_status": "unclassified",
     "unclassified_policy": "list_only_no_skill_scan",
-    "session_selected_project": {
+    "saved_selected_project": {
       "enabled": true,
       "selection": "native_picker_token_only",
-      "must_be_within_root": true,
+      "must_be_within_root": false,
+      "exact_project_only": true,
       "classification": "project",
       "candidate_discovery": false,
-      "persistence": false,
+      "persistence": "local_only_0600",
+      "local_state": "generated/project-skills/local-projects.json",
+      "remove_by": "stable_project_id_only",
+      "remove_observed_project": false,
       "human_associations": false
     }
   },
@@ -197,13 +210,17 @@
     "current_phase_writes": [
       "generated/project-skills/snapshot.json",
       "generated/project-skills/last-attempt.json",
-      "generated/project-skills/项目Skill总览.md"
+      "generated/project-skills/项目Skill总览.md",
+      "generated/project-skills/local-root.json",
+      "generated/project-skills/local-projects.json"
     ],
     "future_write_root": "generated/project-skills",
     "future_allowed_outputs": [
       "generated/project-skills/snapshot.json",
       "generated/project-skills/last-attempt.json",
-      "generated/project-skills/项目Skill总览.md"
+      "generated/project-skills/项目Skill总览.md",
+      "generated/project-skills/local-root.json",
+      "generated/project-skills/local-projects.json"
     ],
     "atomic_writes": true,
     "file_mode": "0600",

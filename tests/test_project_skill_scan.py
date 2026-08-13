@@ -34,7 +34,7 @@ from project_skill_fixture_materializer import (  # noqa: E402
 )
 
 
-FIXED_TIME = "2000-01-01T12:00:00Z"
+FIXED_TIME = "2026-08-11T12:00:00Z"
 BOUNDARY_REF = "project-skill-observation-boundary-v1"
 PROJECTS_PATH = ROOT / "registry" / "project_skill_projects.json"
 ASSOCIATIONS_PATH = ROOT / "registry" / "project_skill_associations.json"
@@ -71,14 +71,14 @@ def _registries(
             "schema_version": 1,
             "registry_id": "fixture-projects-v1",
             "observation_boundary_ref": BOUNDARY_REF,
-            "confirmed_on": "2000-01-01",
+            "confirmed_on": "2026-08-11",
             "projects": [_project_row(row) for row in projects],
         },
         {
             "schema_version": 1,
             "registry_id": "fixture-associations-v1",
             "observation_boundary_ref": BOUNDARY_REF,
-            "confirmed_on": "2000-01-01",
+            "confirmed_on": "2026-08-11",
             "associations": list(associations or []),
         },
     )
@@ -123,6 +123,17 @@ def _approved_preview_boundary() -> dict[str, Any]:
     return boundary
 
 
+def _configured_root() -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "root_id": "legacy-documents-root-v1",
+        "path": str(scan.PRODUCTION_ROOT),
+        "configured_at": "2026-08-13T12:00:00Z",
+        "device": 1,
+        "inode": 2,
+    }
+
+
 class ProjectSkillScanTests(unittest.TestCase):
     maxDiff = None
 
@@ -130,14 +141,6 @@ class ProjectSkillScanTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.expected = load_expected_matrix()
         cls.snapshot_schema = json.loads(SNAPSHOT_SCHEMA_PATH.read_text(encoding="utf-8"))
-
-    def test_production_root_is_portable_home_documents(self) -> None:
-        self.assertEqual(scan.PRODUCTION_ROOT, Path.home() / "Documents")
-        self.assertEqual(scan.PRODUCTION_ROOT_DECLARATION, "~/Documents")
-        boundary = json.loads(BOUNDARY_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(
-            boundary["source_scope"]["root"], scan.PRODUCTION_ROOT_DECLARATION
-        )
 
     def _assert_safe_cli_failure(
         self,
@@ -488,12 +491,12 @@ class ProjectSkillScanTests(unittest.TestCase):
 
     def test_008_human_association_stays_separate_from_zero_machine_observation(self) -> None:
         association = {
-            "association_id": "fixture-association-human-design",
+            "association_id": "fixture-association-008-design",
             "project_id": "fixture-project-human",
             "relationship": "human_association",
             "asset_id": "skill:design-guidance",
             "reason": "Synthetic human memory only.",
-            "source": "synthetic-confirmation",
+            "source": "gate-a-fixture",
         }
         payload, _ = self._scan_materialized("human-only", associations=[association])
         project = _project(payload, "fixture-project-human")
@@ -1692,7 +1695,7 @@ class ProjectSkillScanTests(unittest.TestCase):
         self.assertEqual(_flatten_observations(payload), [])
         self.assertNotIn(temporary, serialized)
         self.assertNotIn("synthetic secret absolute path", serialized)
-        self.assertNotIn("/" + "Users/", serialized)
+        self.assertNotIn("/Users/", serialized)
 
     def test_budget_constants_and_depth_are_frozen(self) -> None:
         self.assertEqual(
@@ -1838,7 +1841,7 @@ class ProjectSkillScanTests(unittest.TestCase):
             )
         self.assertEqual(first, second)
         serialized = json.dumps(first, ensure_ascii=False, sort_keys=True)
-        self.assertNotIn("/" + "Users/", serialized)
+        self.assertNotIn("/Users/", serialized)
         self.assertNotIn("file://", serialized)
         self.assertNotIn("BODY_SENTINEL", serialized)
 
@@ -1886,22 +1889,30 @@ class ProjectSkillScanTests(unittest.TestCase):
         with mock.patch.object(
             scan, "_load_fixed_json", return_value=_approved_preview_boundary()
         ), mock.patch.object(
+            scan, "load_project_skill_root_config", return_value=_configured_root()
+        ), mock.patch.object(
             scan, "build_project_skill_snapshot", return_value=payload
         ) as builder, redirect_stdout(stdout):
             self.assertEqual(scan._main(["--preview"]), 0)
-        builder.assert_called_once_with()
+        builder.assert_called_once_with(
+            root=str(scan.PRODUCTION_ROOT),
+            root_config_id="legacy-documents-root-v1",
+            expected_root_identity=(1, 2),
+        )
         self.assertEqual(json.loads(stdout.getvalue()), payload)
 
     def test_cli_runtime_validation_rejects_incomplete_payload_and_oserror_emits_one_safe_json(self) -> None:
         invalid = {
             "schema_version": 1,
             "scan_status": "complete",
-            "unexpected": "/private/synthetic/SHOULD_NOT_EMIT",
+            "unexpected": "/Users/private/SHOULD_NOT_EMIT",
         }
         stdout = io.StringIO()
         stderr = io.StringIO()
         with mock.patch.object(
             scan, "_load_fixed_json", return_value=_approved_preview_boundary()
+        ), mock.patch.object(
+            scan, "load_project_skill_root_config", return_value=_configured_root()
         ), mock.patch.object(
             scan, "build_project_skill_snapshot", return_value=invalid
         ), redirect_stdout(stdout), redirect_stderr(stderr):
@@ -1918,9 +1929,11 @@ class ProjectSkillScanTests(unittest.TestCase):
         with mock.patch.object(
             scan, "_load_fixed_json", return_value=_approved_preview_boundary()
         ), mock.patch.object(
+            scan, "load_project_skill_root_config", return_value=_configured_root()
+        ), mock.patch.object(
             scan,
             "build_project_skill_snapshot",
-            side_effect=OSError(errno.EIO, "/private/synthetic/OS_ERROR_MUST_NOT_EMIT"),
+            side_effect=OSError(errno.EIO, "/Users/private/OS_ERROR_MUST_NOT_EMIT"),
         ), redirect_stdout(stdout), redirect_stderr(stderr):
             self.assertEqual(scan._main(["--preview"]), 2)
         self._assert_safe_cli_failure(
@@ -2030,15 +2043,15 @@ class ProjectSkillScanTests(unittest.TestCase):
             "relationship": "human_association",
             "asset_id": "skill:a",
             "reason": "Fixture association.",
-            "source": "synthetic-confirmation",
+            "source": "gate-a-fixture",
         }
         cases: dict[str, tuple[dict[str, Any], dict[str, Any]]] = {}
 
         projects = json.loads(json.dumps(base_projects))
-        projects["unexpected"] = "https://private.invalid/TOP_EXTRA"
+        projects["unexpected"] = "/Users/private/TOP_EXTRA"
         cases["project-top-extra"] = (projects, base_associations)
         associations = json.loads(json.dumps(base_associations))
-        associations["unexpected"] = "https://private.invalid/ASSOCIATION_EXTRA"
+        associations["unexpected"] = "/Users/private/ASSOCIATION_EXTRA"
         cases["association-top-extra"] = (base_projects, associations)
         projects = json.loads(json.dumps(base_projects))
         projects["confirmed_on"] = "2026-99-99"
@@ -2122,7 +2135,7 @@ class ProjectSkillScanTests(unittest.TestCase):
                         generated_at=FIXED_TIME,
                     )
                 root_open.assert_not_called()
-                self.assertNotIn("/" + "Users/", str(rejected.exception))
+                self.assertNotIn("/Users/", str(rejected.exception))
                 self.assertNotIn("TOP_EXTRA", str(rejected.exception))
                 self.assertNotIn("ASSOCIATION_EXTRA", str(rejected.exception))
 
@@ -2207,7 +2220,7 @@ class ProjectSkillScanTests(unittest.TestCase):
 
             def failing_read(fd: int, amount: int) -> bytes:
                 if _REAL_OS_FSTAT(fd).st_ino == inode:
-                    raise OSError(errno.EIO, "/private/synthetic/EIO_READ_SECRET")
+                    raise OSError(errno.EIO, "/Users/private/EIO_READ_SECRET")
                 return _REAL_OS_READ(fd, amount)
 
             with mock.patch.object(scan.os, "read", side_effect=failing_read):
@@ -2281,7 +2294,7 @@ class ProjectSkillScanTests(unittest.TestCase):
                 nonlocal injected
                 if manifest_fd is not None and fd == manifest_fd and not injected:
                     injected = True
-                    raise OSError(errno.EIO, "/private/synthetic/FSTAT_EIO_SECRET")
+                    raise OSError(errno.EIO, "/Users/private/FSTAT_EIO_SECRET")
                 return _REAL_OS_FSTAT(fd)
 
             scan._require_descriptor_safety()
@@ -2436,17 +2449,21 @@ class ProjectSkillScanTests(unittest.TestCase):
         for _ in range(2):
             stdout = io.StringIO()
             with mock.patch.object(scan, "_load_fixed_json", return_value=boundary), mock.patch.object(
+                scan, "load_project_skill_root_config", return_value=_configured_root()
+            ), mock.patch.object(
                 scan, "build_project_skill_snapshot", return_value=complete
             ), redirect_stdout(stdout):
                 self.assertEqual(scan._main(["--preview"]), 0)
             outputs.append(stdout.getvalue())
         self.assertEqual(outputs[0], outputs[1])
         self.assertEqual(json.loads(outputs[0]), complete)
-        self.assertNotIn("/" + "Users/", outputs[0])
+        self.assertNotIn("/Users/", outputs[0])
 
         noncomplete, _ = self._scan_materialized("malicious-frontmatter")
         stdout = io.StringIO()
         with mock.patch.object(scan, "_load_fixed_json", return_value=boundary), mock.patch.object(
+            scan, "load_project_skill_root_config", return_value=_configured_root()
+        ), mock.patch.object(
             scan, "build_project_skill_snapshot", return_value=noncomplete
         ), redirect_stdout(stdout):
             self.assertEqual(scan._main(["--preview"]), 2)

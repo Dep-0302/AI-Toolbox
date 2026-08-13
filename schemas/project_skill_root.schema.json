@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.ai-os.invalid/schemas/project-skill-root.schema.json",
+  "title": "AI-Toolbox local Project Skill observation root setting",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "root_id", "path", "configured_at", "device", "inode"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "root_id": {
+      "type": "string",
+      "pattern": "^(?:legacy-documents-root-v1|root-[a-f0-9]{16})$"
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^/",
+      "not": {"pattern": "(^|/)\\.{1,2}(/|$)|\\u0000"}
+    },
+    "configured_at": {"type": "string", "format": "date-time", "maxLength": 64},
+    "device": {"type": "integer", "minimum": 0},
+    "inode": {"type": "integer", "minimum": 0}
+  }
+}

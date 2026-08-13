@@ -16,6 +16,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  Trash2,
   UserRound,
   X,
 } from 'lucide-react'
@@ -592,7 +593,7 @@ function ProjectFolderSelection({ projects, value, onChange, onChooseOtherFolder
           <option value="">请选择项目文件夹</option>
           {projects.map((project) => (
             <option value={project.project_id} key={project.project_id}>
-              {project.temporary ? `临时：${project.display_name}` : project.display_name}
+              {project.display_name}
             </option>
           ))}
           <option value={OTHER_PROJECT_FOLDER_VALUE}>选择其他文件夹…</option>
@@ -602,7 +603,36 @@ function ProjectFolderSelection({ projects, value, onChange, onChooseOtherFolder
   )
 }
 
-function SelectedProjectSkills({ project, snapshot }) {
+function ProjectRootSetting({ root, onChooseRoot }) {
+  const configured = root?.configured === true
+  return (
+    <section className={`project-skill-root-setting${configured ? ' is-configured' : ''}`} aria-label="项目 Skill 观察根">
+      <span className="project-folder-selection-icon"><Folder size={19} /></span>
+      <div>
+        <strong>{configured ? '项目观察根' : '尚未选择项目观察根'}</strong>
+        {configured ? (
+          <>
+            <code>{root.display_path}</code>
+            <small>只枚举这一层的项目候选；设置仅保存在本机，不写入发布版本。</small>
+          </>
+        ) : (
+          <small>先选择一个长期项目父目录；公开版不会默认锁定到任何用户的 Documents。</small>
+        )}
+      </div>
+      <button
+        className={configured ? 'secondary-button' : 'refresh-button'}
+        type="button"
+        aria-label="选择项目 Skill 观察根"
+        onClick={(event) => onChooseRoot?.(event.currentTarget)}
+      >
+        <Folder size={16} />
+        {configured ? '更换观察根' : '选择观察根'}
+      </button>
+    </section>
+  )
+}
+
+function SelectedProjectSkills({ project, snapshot, onRemoveSavedProject, removing }) {
   const groups = projectSkillScenarioGroups(project)
   const metrics = projectSkillSummary(project, snapshot)
   const associations = projectHumanAssociations(snapshot, project.project_id)
@@ -614,7 +644,19 @@ function SelectedProjectSkills({ project, snapshot }) {
           <h2>{project.display_name}</h2>
           <p>{metrics.logicalSkillCount} 个 Skill · {metrics.fileObservationCount} 条文件观察；按场景浏览，点击卡片查看详情。</p>
         </div>
-        <code>{project.relative_path}</code>
+        {project.saved && (
+          <button
+            className="project-skill-remove-monitor"
+            type="button"
+            aria-label={`移除 ${project.display_name} 的本机监测`}
+            title="只移除 AI-Toolbox 的本机监测记录，不删除或修改项目文件"
+            disabled={removing}
+            onClick={() => onRemoveSavedProject?.(project.project_id)}
+          >
+            <Trash2 size={15} />
+            {removing ? '正在移除…' : '移除监测'}
+          </button>
+        )}
       </div>
       {groups.length ? (
         <div className="scenario-collection project-scenario-collection">
@@ -769,6 +811,7 @@ function ChangesSummary({ changes }) {
 }
 
 export default function ProjectSkillsView({
+  root,
   snapshot,
   attempt,
   integrity,
@@ -778,8 +821,11 @@ export default function ProjectSkillsView({
   error = null,
   onRefresh,
   onReload,
-  temporaryProjectSkill,
+  savedProjects = [],
+  preferredProjectId = '',
+  onRemoveSavedProject,
   onChooseOtherFolder,
+  onChooseRoot,
 }) {
   const [selectedProjectId, setSelectedProjectId] = useState('')
   const [reportOpen, setReportOpen] = useState(false)
@@ -787,15 +833,19 @@ export default function ProjectSkillsView({
   const reportTriggerRef = useRef(null)
   const classificationTriggerRef = useRef(null)
 
-  const temporaryProject = temporaryProjectSkill?.snapshot?.projects?.[0]
+  const savedSelectableProjects = useMemo(
+    () => (savedProjects || []).flatMap((row) => {
+      const project = row?.snapshot?.projects?.[0]
+      return project ? [{ ...project, saved: true, savedSnapshot: row.snapshot }] : []
+    }),
+    [savedProjects],
+  )
   const selectableProjects = useMemo(() => {
     const registered = (snapshot?.projects || []).filter((project) => project.classification === 'project')
-    return temporaryProject
-      ? [...registered, { ...temporaryProject, temporary: true }]
-      : registered
-  }, [snapshot, temporaryProject])
+    return [...registered, ...savedSelectableProjects]
+  }, [savedSelectableProjects, snapshot])
   const selectedProject = selectableProjects.find((project) => project.project_id === selectedProjectId) || null
-  const selectedProjectSnapshot = selectedProject?.temporary ? temporaryProjectSkill.snapshot : snapshot
+  const selectedProjectSnapshot = selectedProject?.saved ? selectedProject.savedSnapshot : snapshot
   const classificationProjects = useMemo(
     () => (snapshot?.projects || []).filter((project) => project.classification === classificationDrawer),
     [classificationDrawer, snapshot],
@@ -806,10 +856,12 @@ export default function ProjectSkillsView({
   }, [selectedProject, selectedProjectId])
 
   useEffect(() => {
-    if (temporaryProject?.project_id) setSelectedProjectId(temporaryProject.project_id)
-  }, [temporaryProject?.project_id])
+    if (preferredProjectId && selectableProjects.some((project) => project.project_id === preferredProjectId)) {
+      setSelectedProjectId(preferredProjectId)
+    }
+  }, [preferredProjectId, selectableProjects])
 
-  if (loading && !snapshot) {
+  if (loading && !snapshot && savedSelectableProjects.length === 0) {
     return (
       <section className="project-skills-view project-skills-loading" aria-label="正在读取项目 Skill">
         <div className="skeleton skeleton-strip" />
@@ -823,6 +875,7 @@ export default function ProjectSkillsView({
 
   if (!snapshot) {
     const failedAttempt = attempt && attempt.scan_status !== 'complete'
+    const rootConfigured = root?.configured === true
     return (
       <section className="project-skills-view project-skills-empty">
         <div className="view-intro">
@@ -832,7 +885,25 @@ export default function ProjectSkillsView({
             <p>分开查看项目内机器观察与经评审的人工关联。</p>
           </div>
         </div>
-        {failedAttempt ? (
+        <ProjectRootSetting root={root} onChooseRoot={onChooseRoot} />
+        <ProjectFolderSelection
+          projects={selectableProjects}
+          value={selectedProjectId}
+          onChange={setSelectedProjectId}
+          onChooseOtherFolder={onChooseOtherFolder}
+          hasSelection={Boolean(selectedProject)}
+        />
+        {selectedProject && (
+          <SelectedProjectSkills
+            project={selectedProject}
+            snapshot={selectedProjectSnapshot}
+            onRemoveSavedProject={onRemoveSavedProject}
+            removing={refreshing}
+          />
+        )}
+        {!rootConfigured ? (
+          <StatePanel icon={Folder} title="先选择项目观察根" detail="选择后仍不会自动扫描；请再点击一次手动刷新，建立该根的只读快照。" />
+        ) : failedAttempt ? (
           <StatePanel icon={AlertTriangle} tone="warning" title="首次观察未建立完整快照" detail="本次未能确认，且尚无上一份完整结果可保留。项目内容不会因此被推断为空。">
             <span className={`project-attempt-badge status-${statusTone(attempt.scan_status)}`}>
               最近尝试：{projectScanStatusLabel(attempt.scan_status)}
@@ -855,10 +926,12 @@ export default function ProjectSkillsView({
           <StatePanel icon={Database} title="尚未建立项目 Skill 观察快照" detail="手动刷新只会观察批准的项目与固定入口，结果仅保存在 AI-Toolbox 的专用生成目录。" />
         )}
         {error && onReload && <button className="secondary-button" type="button" onClick={onReload}>重新读取</button>}
-        <button className="refresh-button project-skills-first-refresh" aria-label="刷新项目 Skill" type="button" onClick={onRefresh} disabled={refreshing || !onRefresh}>
-          <RefreshCw size={17} className={refreshing ? 'spin' : ''} />
-          {refreshing ? '正在手动观察…' : '手动刷新项目观察'}
-        </button>
+        {rootConfigured && (
+          <button className="refresh-button project-skills-first-refresh" aria-label="刷新项目 Skill" type="button" onClick={onRefresh} disabled={refreshing || !onRefresh}>
+            <RefreshCw size={17} className={refreshing ? 'spin' : ''} />
+            {refreshing ? '正在手动观察…' : '手动刷新项目观察'}
+          </button>
+        )}
       </section>
     )
   }
@@ -885,6 +958,8 @@ export default function ProjectSkillsView({
         </div>
       )}
 
+      <ProjectRootSetting root={root} onChooseRoot={onChooseRoot} />
+
       <ProjectFolderSelection
         projects={selectableProjects}
         value={selectedProjectId}
@@ -894,7 +969,12 @@ export default function ProjectSkillsView({
       />
 
       {selectedProject && (
-        <SelectedProjectSkills project={selectedProject} snapshot={selectedProjectSnapshot} />
+        <SelectedProjectSkills
+          project={selectedProject}
+          snapshot={selectedProjectSnapshot}
+          onRemoveSavedProject={onRemoveSavedProject}
+          removing={refreshing}
+        />
       )}
 
       <StatusSummary

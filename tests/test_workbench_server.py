@@ -26,6 +26,18 @@ from toolbox_scan import build_toolbox_payload
 FIXED_NOW = "2026-08-06T12:00:00Z"
 
 
+def configured_project_skill_root_state() -> dict:
+    return {
+        "configured": True,
+        "root_id": "legacy-documents-root-v1",
+        "display_path": "~/Documents",
+        "configured_at": FIXED_NOW,
+        "path": Path("/safe/Documents"),
+        "device": 12,
+        "inode": 34,
+    }
+
+
 def candidate_payload(
     generated_at: str = "2026-08-10T12:00:00+00:00",
     source_dir: str = "/fixture/collection",
@@ -897,6 +909,59 @@ class WorkbenchStorageTests(unittest.TestCase):
                     selected = app.validate_selected_source_root(str(allowed))
                     self.assertEqual(selected["path"], allowed)
 
+    def test_project_sources_and_roots_reject_system_and_overbroad_directories(self) -> None:
+        blocked = (
+            Path("/System"),
+            Path("/Library"),
+            Path("/Applications"),
+            Path("/private/etc"),
+            Path("/Users"),
+            Path("/Volumes"),
+        )
+        for validator in (
+            app.validate_selected_source_root,
+            app.validate_selected_observation_root,
+        ):
+            for path in blocked:
+                with self.subTest(validator=validator.__name__, path=path), self.assertRaises(
+                    app.FolderSelectionError
+                ) as raised:
+                    validator(str(path))
+                self.assertIn(
+                    raised.exception.reason,
+                    {"folder_root_sensitive", "folder_root_too_broad"},
+                )
+
+    def test_configuring_documents_creates_a_portable_root_not_internal_registry_identity(self) -> None:
+        selected = {
+            "path": app.PROJECT_SKILL_PRODUCTION_ROOT.absolute(),
+            "display_path": "~/Documents",
+            "device": 12,
+            "inode": 34,
+        }
+        configured = {
+            "configured": True,
+            "root_id": "root-0123456789abcdef",
+            "display_path": "~/Documents",
+            "configured_at": FIXED_NOW,
+            "path": selected["path"],
+            "device": 12,
+            "inode": 34,
+        }
+        with mock.patch.object(
+            app, "validate_selected_observation_root", return_value=selected
+        ), mock.patch.object(
+            app, "write_project_skill_root_config"
+        ) as write, mock.patch.object(
+            app, "load_project_skill_root_state", return_value=configured
+        ):
+            result = app.configure_project_skill_root(selected)
+
+        self.assertEqual(result, configured)
+        written = write.call_args.args[0]
+        self.assertRegex(written["root_id"], r"^root-[a-f0-9]{16}$")
+        self.assertNotEqual(written["root_id"], "legacy-documents-root-v1")
+
     def test_selected_project_preview_is_one_in_memory_project_without_candidate_discovery(self) -> None:
         with tempfile.TemporaryDirectory() as observation_temp:
             observation_root = Path(observation_temp).resolve()
@@ -927,7 +992,7 @@ class WorkbenchStorageTests(unittest.TestCase):
         self.assertNotIn("BODY_SECRET", json.dumps(payload, ensure_ascii=False))
         self.assertEqual(before, after)
 
-    def test_selected_project_root_must_stay_inside_frozen_observation_root(self) -> None:
+    def test_selected_project_root_may_be_outside_configured_observation_root(self) -> None:
         with tempfile.TemporaryDirectory() as observation_temp, tempfile.TemporaryDirectory() as outside_temp:
             observation_root = Path(observation_temp).resolve()
             inside = observation_root / "project"
@@ -935,11 +1000,13 @@ class WorkbenchStorageTests(unittest.TestCase):
             inside.mkdir()
             outside.mkdir()
             with mock.patch.object(app, "PROJECT_SKILL_PRODUCTION_ROOT", observation_root):
-                selected = app.validate_selected_project_root(str(inside))
-                self.assertEqual(selected["relative_path"], "project")
-                with self.assertRaises(app.FolderSelectionError) as raised:
-                    app.validate_selected_project_root(str(outside))
-        self.assertEqual(raised.exception.reason, "project_folder_outside_observation_root")
+                inside_selected = app.validate_selected_project_root(str(inside))
+                outside_selected = app.validate_selected_project_root(str(outside))
+
+        self.assertEqual(inside_selected["path"], inside)
+        self.assertEqual(outside_selected["path"], outside)
+        self.assertNotIn("relative_path", inside_selected)
+        self.assertNotIn("relative_path", outside_selected)
 
     def test_concurrent_candidate_builds_are_serialized_and_keep_roots_isolated(self) -> None:
         class Builder:
@@ -1319,7 +1386,10 @@ class WorkbenchHTTPTests(unittest.TestCase):
         status, headers, payload = self.request_json("/api/health")
         self.assertEqual(status, 200)
         self.assertEqual(payload["mode"], "observe-only")
-        self.assertEqual(payload["release_id"], "0.2.2-public")
+        self.assertEqual(payload["app"], app.WORKBENCH_IDENTITY["app"])
+        self.assertEqual(payload["api_version"], app.WORKBENCH_IDENTITY["api_version"])
+        self.assertEqual(payload["build_id"], app.WORKBENCH_IDENTITY["build_id"])
+        self.assertEqual(payload["source_id"], app.WORKBENCH_IDENTITY["source_id"])
         self.assertFalse(payload["degraded"])
         self.assertEqual(payload["errors"], [])
         self.assertFalse(payload["capabilities"]["host_mutation"])
@@ -1377,7 +1447,7 @@ class WorkbenchHTTPTests(unittest.TestCase):
         self.assertEqual(payload["error"], "collection_snapshot_missing")
         scan.assert_not_called()
 
-    def test_project_skill_get_is_storage_only_and_missing_is_404(self) -> None:
+    def test_project_skill_get_is_storage_only_and_unconfigured_is_empty_200(self) -> None:
         self.assertFalse(self.project_skills_generated.exists())
         with mock.patch.object(
             app,
@@ -1392,8 +1462,9 @@ class WorkbenchHTTPTests(unittest.TestCase):
         ):
             status, headers, payload = self.request_json("/api/project-skills")
 
-        self.assertEqual(status, 404)
-        self.assertEqual(payload["error"], "project_skill_snapshot_missing")
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["root"]["configured"])
+        self.assertIsNone(payload["snapshot"])
         self.assertEqual(headers["Cache-Control"], "no-store")
         self.assertFalse(self.project_skills_generated.exists())
 
@@ -1461,7 +1532,10 @@ class WorkbenchHTTPTests(unittest.TestCase):
         store.load_snapshot.return_value = snapshot
         store.load_last_attempt.return_value = attempt
         store.load_markdown.return_value = "# safe derived report\n"
+        root_state = configured_project_skill_root_state()
         with mock.patch.object(app, "ProjectSkillStore", return_value=store), mock.patch.object(
+            app, "load_project_skill_root_state", return_value=root_state
+        ), mock.patch.object(
             app,
             "build_project_skill_snapshot",
             side_effect=AssertionError("GET must not scan"),
@@ -1472,6 +1546,8 @@ class WorkbenchHTTPTests(unittest.TestCase):
         self.assertEqual(
             payload,
             {
+                "root": app.project_skill_root_payload(root_state),
+                "saved_projects": [],
                 "snapshot": snapshot,
                 "last_attempt": attempt,
                 "report": {
@@ -1488,25 +1564,30 @@ class WorkbenchHTTPTests(unittest.TestCase):
 
     def test_project_skill_get_internal_error_is_stable_json(self) -> None:
         with mock.patch.object(
-            app, "load_project_skill_api_view", side_effect=RuntimeError("/private/fixture-project")
+            app, "load_project_skill_api_view", side_effect=RuntimeError("/home/example/private")
         ):
             status, _, payload = self.request_json("/api/project-skills")
         self.assertEqual(status, 500)
         self.assertEqual(payload["error"], "snapshot_invalid")
-        self.assertNotIn("/private/fixture-project", json.dumps(payload))
+        self.assertNotIn("/home/example/private", json.dumps(payload))
 
     def test_project_skill_get_exposes_first_incomplete_attempt_without_snapshot(self) -> None:
         attempt = {"scan_status": "partial", "promoted": False}
         store = mock.Mock()
         store.load_snapshot.return_value = None
         store.load_last_attempt.return_value = attempt
-        with mock.patch.object(app, "ProjectSkillStore", return_value=store):
+        root_state = configured_project_skill_root_state()
+        with mock.patch.object(app, "ProjectSkillStore", return_value=store), mock.patch.object(
+            app, "load_project_skill_root_state", return_value=root_state
+        ):
             status, _, payload = self.request_json("/api/project-skills")
 
         self.assertEqual(status, 200)
         self.assertEqual(
             payload,
             {
+                "root": app.project_skill_root_payload(root_state),
+                "saved_projects": [],
                 "snapshot": None,
                 "last_attempt": attempt,
                 "report": {"available": False, "generation_id": None, "content": None},
@@ -1522,7 +1603,11 @@ class WorkbenchHTTPTests(unittest.TestCase):
             "complete_snapshot_generation_id": "oldgeneration123"
         }
         store.load_markdown.return_value = "# valid current report\n"
-        with mock.patch.object(app, "ProjectSkillStore", return_value=store):
+        with mock.patch.object(app, "ProjectSkillStore", return_value=store), mock.patch.object(
+            app,
+            "load_project_skill_root_state",
+            return_value=configured_project_skill_root_state(),
+        ):
             status, _, payload = self.request_json("/api/project-skills")
         self.assertEqual(status, 200)
         self.assertEqual(payload["snapshot"]["generation_id"], "newgeneration123")
@@ -1543,7 +1628,11 @@ class WorkbenchHTTPTests(unittest.TestCase):
             "complete_snapshot_generation_id": generation
         }
         store.load_markdown.side_effect = app.ProjectSkillPersistenceError("stale")
-        with mock.patch.object(app, "ProjectSkillStore", return_value=store):
+        with mock.patch.object(app, "ProjectSkillStore", return_value=store), mock.patch.object(
+            app,
+            "load_project_skill_root_state",
+            return_value=configured_project_skill_root_state(),
+        ):
             status, _, payload = self.request_json("/api/project-skills")
         self.assertEqual(status, 200)
         self.assertEqual(payload["snapshot"]["generation_id"], generation)
@@ -1561,7 +1650,11 @@ class WorkbenchHTTPTests(unittest.TestCase):
         store.load_snapshot.return_value = {"generation_id": generation}
         store.load_last_attempt.return_value = None
         store.load_markdown.return_value = "# current\n"
-        with mock.patch.object(app, "ProjectSkillStore", return_value=store):
+        with mock.patch.object(app, "ProjectSkillStore", return_value=store), mock.patch.object(
+            app,
+            "load_project_skill_root_state",
+            return_value=configured_project_skill_root_state(),
+        ):
             status, _, payload = self.request_json("/api/project-skills")
         self.assertEqual(status, 200)
         self.assertEqual(payload["snapshot"]["generation_id"], generation)
@@ -1613,7 +1706,7 @@ class WorkbenchHTTPTests(unittest.TestCase):
             (
                 "non-empty-object",
                 self.post_headers(),
-                b'{"path":"/private/fixture-project"}',
+                b'{"path":"/home/example/private/project"}',
                 400,
                 "unexpected_fields",
             ),
@@ -1831,6 +1924,10 @@ class WorkbenchHTTPTests(unittest.TestCase):
         with mock.patch.object(
             app, "PROJECT_SKILL_BOUNDARY_PATH", boundary_path
         ), mock.patch.object(
+            app,
+            "load_project_skill_root_state",
+            return_value=configured_project_skill_root_state(),
+        ), mock.patch.object(
             app, "build_project_skill_snapshot", return_value=scanner_payload
         ) as build, mock.patch.object(
             app, "ProjectSkillStore", return_value=store
@@ -1845,10 +1942,51 @@ class WorkbenchHTTPTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(payload, persisted)
         self.assertNotEqual(payload["generation_id"], scanner_payload["generation_id"])
-        build.assert_called_once_with()
+        build.assert_called_once_with(
+            root=Path("/safe/Documents"),
+            projects_registry=mock.ANY,
+            associations_registry=mock.ANY,
+            root_config_id="legacy-documents-root-v1",
+            expected_root_identity=(12, 34),
+        )
         store_type.assert_called_once_with(app.PROJECT_SKILL_OUTPUT_ROOT.parents[1])
         store.persist_scan_result.assert_called_once_with(scanner_payload)
         store.load_snapshot.assert_called_once_with()
+
+    def test_static_gate_a_registries_require_the_explicit_internal_migration_identity(self) -> None:
+        scanner_payload = project_skill_payload()
+        for root_id, expects_static in (
+            ("legacy-documents-root-v1", True),
+            ("root-0123456789abcdef", False),
+        ):
+            with self.subTest(root_id=root_id):
+                root_state = {
+                    **configured_project_skill_root_state(),
+                    "root_id": root_id,
+                    "path": app.PROJECT_SKILL_PRODUCTION_ROOT.absolute(),
+                }
+                store = mock.Mock()
+                store.last_receipt_error = None
+                store.persist_scan_result.return_value = True
+                store.load_snapshot.return_value = scanner_payload
+                with mock.patch.object(
+                    app, "load_project_skill_root_state", return_value=root_state
+                ), mock.patch.object(
+                    app, "build_project_skill_snapshot", return_value=scanner_payload
+                ) as build, mock.patch.object(
+                    app, "ProjectSkillStore", return_value=store
+                ):
+                    complete, _ = app.scan_project_skills_and_persist()
+
+                self.assertTrue(complete)
+                projects = build.call_args.kwargs["projects_registry"]
+                associations = build.call_args.kwargs["associations_registry"]
+                if expects_static:
+                    self.assertIsNone(projects)
+                    self.assertIsNone(associations)
+                else:
+                    self.assertEqual(projects["projects"], [])
+                    self.assertEqual(associations["associations"], [])
 
     def test_project_skill_partial_and_error_refresh_return_422_and_preserve_lkg(self) -> None:
         self.project_skills_generated.mkdir()
@@ -2240,7 +2378,13 @@ class WorkbenchHTTPTests(unittest.TestCase):
                 self.assertEqual(response["error"], "unexpected_fields")
                 picker.assert_not_called()
 
-    def test_project_picker_outside_observation_root_returns_safe_message(self) -> None:
+    def test_project_picker_accepts_one_exact_project_outside_configured_root(self) -> None:
+        selection = {
+            "path": Path("/outside/Documents/project"),
+            "display_path": "/outside/Documents/project",
+            "device": 22,
+            "inode": 33,
+        }
         with mock.patch.object(
             app,
             "run_native_folder_picker",
@@ -2252,9 +2396,7 @@ class WorkbenchHTTPTests(unittest.TestCase):
         ) as picker, mock.patch.object(
             app,
             "validate_selected_project_root",
-            side_effect=app.FolderSelectionError(
-                "project_folder_outside_observation_root"
-            ),
+            return_value=selection,
         ):
             status, _, response = self.request_json(
                 "/api/folder-picker",
@@ -2263,16 +2405,65 @@ class WorkbenchHTTPTests(unittest.TestCase):
                 headers=self.post_headers(),
             )
 
-        self.assertEqual(status, 400)
-        self.assertEqual(response["error"], "project_folder_outside_observation_root")
-        self.assertEqual(
-            response["message"],
-            "所选文件夹不在 Documents 观察根内；请选择其中的一个具体项目文件夹。",
-        )
-        self.assertNotIn("/outside", json.dumps(response, ensure_ascii=False))
+        self.assertEqual(status, 200)
+        self.assertTrue(response["selected"])
+        self.assertIn("selection_token", response)
+        self.assertEqual(response["display_path"], "/outside/Documents/project")
         picker.assert_called_once_with(app.PROJECT_SKILL_FOLDER_SELECTION_TARGET)
 
-    def test_project_skill_folder_picker_uses_target_bound_token_and_in_memory_preview(self) -> None:
+    def test_project_skill_root_picker_uses_separate_token_and_persists_only_on_confirm(self) -> None:
+        selection = {
+            "path": Path("/safe/projects"),
+            "display_path": "/safe/projects",
+            "device": 41,
+            "inode": 73,
+        }
+        configured = {
+            "configured": True,
+            "root_id": "root-1234567890abcdef",
+            "display_path": "/safe/projects",
+            "configured_at": FIXED_NOW,
+            "path": Path("/safe/projects"),
+            "device": 41,
+            "inode": 73,
+        }
+        with mock.patch.object(
+            app,
+            "run_native_folder_picker",
+            return_value={
+                "selected": True,
+                "cancelled": False,
+                "path": "/safe/projects",
+            },
+        ) as picker, mock.patch.object(
+            app, "validate_selected_observation_root", return_value=selection
+        ), mock.patch.object(app, "configure_project_skill_root") as configure:
+            status, _, picked = self.request_json(
+                "/api/folder-picker",
+                method="POST",
+                data=json.dumps(
+                    {"target": app.PROJECT_SKILL_ROOT_SELECTION_TARGET}
+                ).encode(),
+                headers=self.post_headers(),
+            )
+            self.assertEqual(status, 200)
+            configure.assert_not_called()
+            configure.return_value = configured
+            status, _, payload = self.request_json(
+                "/api/project-skills/root-selection/confirm",
+                method="POST",
+                data=json.dumps(
+                    {"selection_token": picked["selection_token"]}
+                ).encode(),
+                headers=self.post_headers(),
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload, {"root": app.project_skill_root_payload(configured)})
+        picker.assert_called_once_with(app.PROJECT_SKILL_ROOT_SELECTION_TARGET)
+        configure.assert_called_once()
+
+    def test_project_skill_folder_picker_uses_target_bound_token_and_saves_observation(self) -> None:
         selected = {
             "path": Path("/safe/project"),
             "display_path": "~/Documents/safe-project",
@@ -2280,7 +2471,17 @@ class WorkbenchHTTPTests(unittest.TestCase):
             "device": 12,
             "inode": 34,
         }
-        preview = {"generation_id": "temporary1234567", "projects": [{}]}
+        saved_project = {
+            "project_id": "saved-project:0123456789abcdef",
+            "saved_at": FIXED_NOW,
+            "snapshot": {"generation_id": "savedproject1234", "projects": [{}]},
+        }
+        save_result = {
+            "mode": "saved",
+            "project_id": saved_project["project_id"],
+            "saved_project": saved_project,
+            "saved_projects": [saved_project],
+        }
         with mock.patch.object(
             app,
             "run_native_folder_picker",
@@ -2301,9 +2502,9 @@ class WorkbenchHTTPTests(unittest.TestCase):
         self.assertNotIn("path", picked)
         with mock.patch.object(
             app,
-            "build_in_memory_project_skill_preview",
-            return_value=preview,
-        ) as build:
+            "save_project_skill_observation",
+            return_value=save_result,
+        ) as save:
             status, _, payload = self.request_json(
                 "/api/project-skills/folder-selection/confirm",
                 method="POST",
@@ -2311,12 +2512,19 @@ class WorkbenchHTTPTests(unittest.TestCase):
                 headers=self.post_headers(),
             )
         self.assertEqual(status, 200)
-        self.assertEqual(payload["snapshot"], preview)
-        self.assertEqual(payload["selection"], {
-            "mode": "temporary",
-            "display_path": "~/Documents/safe-project",
-        })
-        build.assert_called_once_with(Path("/safe/project"), expected_identity=(12, 34))
+        self.assertEqual(payload["saved_project"], saved_project)
+        self.assertEqual(payload["saved_projects"], [saved_project])
+        self.assertEqual(
+            payload["selection"],
+            {"mode": "saved", "project_id": saved_project["project_id"]},
+        )
+        saved_record = save.call_args.args[0]
+        self.assertEqual(saved_record["path"], selected["path"])
+        self.assertEqual(
+            (saved_record["device"], saved_record["inode"]),
+            (selected["device"], selected["inode"]),
+        )
+        self.assertNotIn("/safe/project", json.dumps(payload))
 
         collection_token, _ = self.server.issue_folder_token(selected)
         status, _, rejected = self.request_json(
@@ -2327,6 +2535,73 @@ class WorkbenchHTTPTests(unittest.TestCase):
         )
         self.assertEqual(status, 409)
         self.assertEqual(rejected["error"], "selection_token_target_mismatch")
+
+    def test_registered_project_selection_returns_existing_id_without_saved_duplicate(self) -> None:
+        selected = {
+            "path": Path("/safe/projects/example-project-alpha"),
+            "display_path": "~/Documents/example-project-alpha",
+            "device": 12,
+            "inode": 34,
+        }
+        result = {
+            "mode": "registered",
+            "project_id": "project-alpha",
+            "saved_projects": [],
+        }
+        token, _ = self.server.issue_folder_token(
+            selected,
+            target=app.PROJECT_SKILL_FOLDER_SELECTION_TARGET,
+        )
+        with mock.patch.object(
+            app, "save_project_skill_observation", return_value=result
+        ) as save:
+            status, _, payload = self.request_json(
+                "/api/project-skills/folder-selection/confirm",
+                method="POST",
+                data=json.dumps({"selection_token": token}).encode(),
+                headers=self.post_headers(),
+            )
+
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            payload,
+            {
+                "saved_projects": [],
+                "selection": {"mode": "registered", "project_id": "project-alpha"},
+            },
+        )
+        save.assert_called_once()
+        self.assertNotIn("/safe/projects", json.dumps(payload))
+
+    def test_saved_project_remove_route_uses_stable_id_and_never_accepts_path(self) -> None:
+        project_id = "saved-project:0123456789abcdef"
+        with mock.patch.object(
+            app, "remove_project_skill_observation", return_value=True
+        ) as remove:
+            status, _, payload = self.request_json(
+                "/api/project-skills/saved-projects/remove",
+                method="POST",
+                data=json.dumps({"project_id": project_id}).encode(),
+                headers=self.post_headers(),
+            )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload, {"removed": True, "project_id": project_id})
+        remove.assert_called_once_with(project_id)
+
+        with mock.patch.object(
+            app,
+            "remove_project_skill_observation",
+            side_effect=AssertionError("invalid request must not remove"),
+        ):
+            status, _, payload = self.request_json(
+                "/api/project-skills/saved-projects/remove",
+                method="POST",
+                data=json.dumps({"path": "/home/example/private/project"}).encode(),
+                headers=self.post_headers(),
+            )
+        self.assertEqual(status, 400)
+        self.assertEqual(payload["error"], "unexpected_fields")
+        self.assertNotIn("/home/example/private", json.dumps(payload))
 
     def test_folder_picker_returns_only_opaque_token_and_display_path(self) -> None:
         selection = {

@@ -634,6 +634,14 @@ class ProjectSkillStore:
     def persist_scan_result(self, snapshot: Any) -> bool:
         row = validate_persistable_snapshot(snapshot)
         previous_complete = self.load_snapshot()
+        if previous_complete is not None and (
+            previous_complete.get("scan_scope", {}).get("root_config_id")
+            != row.get("scan_scope", {}).get("root_config_id")
+        ):
+            # A complete snapshot from another configured root is not a legal
+            # changes baseline.  It remains readable until this new complete
+            # snapshot reaches the final commit point.
+            previous_complete = None
         previous_generation = (
             previous_complete["generation_id"] if previous_complete is not None else None
         )
