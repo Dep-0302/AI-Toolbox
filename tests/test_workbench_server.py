@@ -1953,17 +1953,27 @@ class WorkbenchHTTPTests(unittest.TestCase):
         store.persist_scan_result.assert_called_once_with(scanner_payload)
         store.load_snapshot.assert_called_once_with()
 
-    def test_static_gate_a_registries_require_the_explicit_internal_migration_identity(self) -> None:
+    def test_static_gate_a_registries_follow_only_the_exact_internal_documents_root(self) -> None:
         scanner_payload = project_skill_payload()
-        for root_id, expects_static in (
-            ("legacy-documents-root-v1", True),
-            ("root-0123456789abcdef", False),
+        for root_id, root_path, expects_static in (
+            (
+                "legacy-documents-root-v1",
+                app.PROJECT_SKILL_PRODUCTION_ROOT.absolute(),
+                True,
+            ),
+            (
+                "root-0123456789abcdef",
+                app.PROJECT_SKILL_PRODUCTION_ROOT.absolute(),
+                True,
+            ),
+            ("legacy-documents-root-v1", Path("/safe/OtherProjects"), False),
+            ("root-0123456789abcdef", Path("/safe/OtherProjects"), False),
         ):
-            with self.subTest(root_id=root_id):
+            with self.subTest(root_id=root_id, root_path=root_path):
                 root_state = {
                     **configured_project_skill_root_state(),
                     "root_id": root_id,
-                    "path": app.PROJECT_SKILL_PRODUCTION_ROOT.absolute(),
+                    "path": root_path,
                 }
                 store = mock.Mock()
                 store.last_receipt_error = None
