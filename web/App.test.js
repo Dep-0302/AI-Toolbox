@@ -1091,6 +1091,12 @@ describe('App refresh state', () => {
     const initial = snapshot(3, '5555555555555555')
     const collections = collectionSnapshot()
     const candidates = candidateCatalog()
+    Object.assign(candidates.items[0], {
+      zh_sum: '',
+      zh_state: 'missing',
+      desc: 'Create cinematic images from a visual reference.',
+      desc_full: 'Create cinematic images from a visual reference with a consistent production-ready style.',
+    })
     candidates.items.push({
       ...candidates.items[0],
       uid: 'candidate-deleted-source',
@@ -1148,7 +1154,13 @@ describe('App refresh state', () => {
     expect(document.querySelectorAll('.collection-source-card')).toHaveLength(6)
     expect(document.body.textContent).toContain('所有收藏，一处看全')
     expect(document.body.textContent).toContain('按功能类型与使用场景整理')
-    expect(document.body.textContent).toContain('1 个收藏源正在被宿主入口引用')
+    expect(document.querySelectorAll('.collection-reminder-card')).toHaveLength(3)
+    expect(document.querySelector('[data-reminder="anchor"]')?.textContent).toContain('1 个引用源需留在原位')
+    expect(document.querySelector('[data-reminder="filing"]')?.textContent).toContain('1 个新增来源待归位')
+    expect(document.querySelector('[data-reminder="introduction"]')?.textContent).toContain('1 项缺少中文简介')
+    expect(document.body.textContent).toContain('可让 Codex 按现有目录规则整理')
+    expect(document.body.textContent).toContain('已有英文说明，可让 Codex 补齐介绍')
+    expect(document.body.textContent).not.toContain('收藏源正在被宿主入口引用')
     expect(document.body.textContent).toContain('原备选库 1 张已保留')
     expect(document.body.textContent).not.toContain('已删除源候选 Skill')
     expect(fetchMock).toHaveBeenCalledWith('/api/collections/check', expect.objectContaining({

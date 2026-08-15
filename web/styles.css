@@ -1595,8 +1595,15 @@ button:disabled {
   white-space: nowrap;
 }
 
-.collection-anchor-warning {
+.collection-reminder-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.collection-reminder-card {
   display: flex;
+  min-width: 0;
   align-items: flex-start;
   gap: 10px;
   padding: 8px 11px;
@@ -1606,23 +1613,26 @@ button:disabled {
   border-radius: 10px;
 }
 
-.collection-anchor-warning svg {
+.collection-reminder-card svg {
   flex: 0 0 auto;
   margin-top: 1px;
 }
 
-.collection-anchor-warning > div {
+.collection-reminder-card > div {
   display: grid;
+  min-width: 0;
   gap: 2px;
 }
 
-.collection-anchor-warning strong {
+.collection-reminder-card strong {
   font-size: 12px;
+  line-height: 1.35;
 }
 
-.collection-anchor-warning span {
+.collection-reminder-card span {
   color: #9a762f;
   font-size: 11px;
+  line-height: 1.45;
 }
 
 .collection-filter-bar {
@@ -4793,6 +4803,10 @@ dd {
   }
 
   .collection-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-reminder-grid {
     grid-template-columns: 1fr;
   }
 

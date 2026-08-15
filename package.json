@@ -1,6 +1,6 @@
 {
   "name": "ai-toolbox-workbench",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Local, observe-only inventory for AI capabilities and project-scoped Skills.",
   "private": true,
   "license": "MIT",

@@ -2,6 +2,16 @@
 
 All notable public changes to AI-Toolbox are documented in this file.
 
+## 0.3.2 - 2026-08-15
+
+### Added
+
+- The All Collections view now shows three compact reminders for anchored sources, new sources awaiting filing, and retained candidate Skills that still need a Chinese introduction.
+
+### Changed
+
+- The anchored-source notice is shorter, and the three reminder cards align in one row on desktop while stacking on narrow screens.
+
 ## 0.3.1 - 2026-08-13
 
 ### Fixed
