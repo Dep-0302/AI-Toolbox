@@ -4,7 +4,7 @@
 
 > Local, observe-only inventory for AI capabilities. No cloud account is required.
 
-当前公开版本：`0.3.1`
+当前公开版本：`0.3.2`
 
 ## 主要能力
 

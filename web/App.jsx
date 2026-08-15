@@ -2069,6 +2069,22 @@ function collectionRelationTone(type) {
   return 'blue'
 }
 
+function collectionSourceNeedsFiling(source) {
+  const relativePath = normalizeCollectionPath(source?.relative_path)
+  return Boolean(relativePath && !relativePath.includes('/') && source?.move_safety === 'review')
+}
+
+function candidateNeedsChineseIntroduction(skill) {
+  if (!skill || String(skill.zh_sum || '').trim()) return false
+  if (skill.zh_state && skill.zh_state !== 'missing') return false
+
+  const original = String(skill.desc_full || skill.desc || '').trim()
+  if (!original) return false
+  const latinCount = (original.match(/[A-Za-z]/g) || []).length
+  const chineseCount = (original.match(/[\u3400-\u9fff]/g) || []).length
+  return latinCount >= 12 && latinCount > chineseCount * 2
+}
+
 function collectionEntriesFor(items, candidateCatalog, sourceRoot) {
   const sourceByPath = new Map(
     items.map((item) => [normalizeCollectionPath(item.relative_path), item]),
@@ -2363,6 +2379,33 @@ function CollectionsView({
     { label: '物理收藏源', value: summary.source_count, icon: Boxes, note: '父项目与原路径仍可回查' },
     { label: '待归场景', value: unassignedScenarioCount, icon: CircleHelp, note: '其他资料不计使用场景' },
   ]
+  const pendingFilingCount = items.filter(collectionSourceNeedsFiling).length
+  const missingChineseIntroductionCount = entries.filter((entry) =>
+    entry.entry_kind === 'candidate_skill' && candidateNeedsChineseIntroduction(entry.skill),
+  ).length
+  const reminders = [
+    {
+      id: 'anchor',
+      value: summary.anchored_source_count,
+      title: '个引用源需留在原位',
+      detail: '已被宿主引用，整理时请勿移动。',
+      icon: LockKeyhole,
+    },
+    {
+      id: 'filing',
+      value: pendingFilingCount,
+      title: '个新增来源待归位',
+      detail: '可让 Codex 按现有目录规则整理。',
+      icon: FolderOpen,
+    },
+    {
+      id: 'introduction',
+      value: missingChineseIntroductionCount,
+      title: '项缺少中文简介',
+      detail: '已有英文说明，可让 Codex 补齐介绍。',
+      icon: FileText,
+    },
+  ]
 
   return (
     <section className="collections-view">
@@ -2417,15 +2460,17 @@ function CollectionsView({
         ))}
       </div>
 
-      {summary.anchored_source_count > 0 && (
-        <div className="collection-anchor-warning">
-          <LockKeyhole size={18} />
-          <div>
-            <strong>{summary.anchored_source_count} 个收藏源正在被宿主入口引用，整理时必须保留原位</strong>
-            <span>当前只生成整理建议，不会移动这些活动锚点。</span>
+      <div className="collection-reminder-grid" aria-label="收藏整理提醒">
+        {reminders.map(({ id, value, title, detail, icon: Icon }) => (
+          <div className="collection-reminder-card" data-reminder={id} key={id}>
+            <Icon size={18} />
+            <div>
+              <strong>{value} {title}</strong>
+              <span>{detail}</span>
+            </div>
           </div>
-        </div>
-      )}
+        ))}
+      </div>
 
       <div className="collection-filter-bar">
         <span className="filter-label">
